@@ -2,16 +2,28 @@
 
 用 Expo（React Native）開發的記帳 App，資料存在 Supabase 雲端，之後規劃上架 Apple App Store。
 
-| 項目     | 選擇                                                      |
-| -------- | --------------------------------------------------------- |
-| 框架     | Expo SDK 57、React Native 0.86、React 19                  |
-| 導覽     | Expo Router（檔案即路由，`src/app/`）                     |
-| 語言     | TypeScript（strict）                                      |
-| 後端     | Supabase（Postgres + Auth），`@supabase/supabase-js`      |
-| 打包上架 | EAS Build / EAS Submit                                    |
-| 程式品質 | ESLint（eslint-config-expo）、Prettier、GitHub Actions CI |
+| 項目     | 選擇                                                 |
+| -------- | ---------------------------------------------------- |
+| 框架     | Expo SDK 57、React Native 0.86、React 19             |
+| 導覽     | Expo Router（檔案即路由，`src/app/`）                |
+| 語言     | TypeScript（strict）                                 |
+| 後端     | Supabase（Postgres + Auth），`@supabase/supabase-js` |
+| 資料存取 | TanStack Query（快取、重新整理）                     |
+| 打包上架 | EAS Build / EAS Submit                               |
+| 程式品質 | ESLint、Prettier、Jest 單元測試、GitHub Actions CI   |
 
 > 為什麼是 SDK 57 而不是最新的 58？App Store 上的 Expo Go 目前只支援 SDK 57，用 57 可以直接拿手機掃 QR code 開發，不需要 Mac 或 Apple 開發者帳號。之後升級方式見[升級 SDK](#升級-sdk)。
+
+## 功能
+
+| 分頁／畫面 | 內容                                                                             |
+| ---------- | -------------------------------------------------------------------------------- |
+| 登入／註冊 | Email + 密碼；註冊後自動建立「我的帳本」、現金帳戶與預設分類                     |
+| 明細       | 依月份切換、依日期分組；本月收入／支出／結餘；右下角＋記一筆，點一筆可編輯或刪除 |
+| 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期、備註、標籤                 |
+| 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類） |
+| 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                   |
+| 設定       | 帳號資訊、連線測試、登出                                                         |
 
 ## 開發環境需求
 
@@ -32,6 +44,8 @@ npm start              # 手機打開 Expo Go 掃 QR code
 
 手機和電腦要在同一個 Wi-Fi；連不上時改用 `npx expo start --tunnel`。
 
+> 修改 `.env` 之後要用 `npx expo start --clear` 清除快取，否則 App 裡還是舊的值。
+
 ## 常用指令
 
 | 指令                                              | 用途                                                                               |
@@ -41,7 +55,8 @@ npm start              # 手機打開 Expo Go 掃 QR code
 | `npm run lint`                                    | ESLint 檢查                                                                        |
 | `npm run typecheck`                               | TypeScript 型別檢查                                                                |
 | `npm run format`                                  | Prettier 自動排版                                                                  |
-| `npm run check`                                   | lint + 型別 + 排版一次跑完（CI 也跑這些）                                          |
+| `npm test`                                        | Jest 單元測試（金額、日期、統計、錯誤訊息）                                        |
+| `npm run check`                                   | lint + 型別 + 排版 + 單元測試一次跑完（CI 也跑這些）                               |
 | `npx expo install <套件>`                         | 安裝套件（會自動挑選與 SDK 相容的版本，**不要用 `npm install` 裝 Expo／RN 套件**） |
 | `npx expo-doctor`                                 | 檢查套件版本與設定問題                                                             |
 
@@ -49,22 +64,26 @@ npm start              # 手機打開 Expo Go 掃 QR code
 
 ```
 src/
-  app/                 # 畫面（Expo Router：每個檔案就是一個路由）
-    _layout.tsx        #   根 layout：主題 + 分頁
-    index.tsx          #   首頁
-    settings.tsx       #   設定（含 Supabase 連線測試）
-  components/          # 共用元件（app-tabs 有 native / web 兩個版本）
-  constants/theme.ts   # 顏色、間距、字型
-  hooks/               # 共用 hooks
-  lib/
-    env.ts             # 讀取 EXPO_PUBLIC_* 環境變數
-    supabase.ts        # Supabase client（帶資料庫型別，登入狀態存在 AsyncStorage）
-    check-supabase-connection.ts
-  types/database.ts    # 由 Supabase 產生的資料庫型別（不要手改）
-supabase/migrations/   # 資料庫結構變更（SQL）
-assets/                # 圖示、啟動畫面（目前是 Expo 預設圖，上架前要換）
-app.json               # App 設定：名稱、Bundle ID、圖示…
-eas.json               # EAS Build / Submit 設定
+  app/                       # 畫面（Expo Router：每個檔案就是一個路由）
+    _layout.tsx              #   根 layout：登入狀態決定能進哪些畫面
+    sign-in.tsx / sign-up.tsx#   登入、註冊（未登入才看得到）
+    (app)/                   #   登入後的畫面
+      _layout.tsx            #     載入帳本，並註冊彈出視窗
+      (tabs)/                #     底部分頁：明細、統計、帳戶、設定
+      transaction/[id].tsx   #     記一筆／編輯記錄（id 為 new 代表新增）
+      account/[id].tsx       #     新增／編輯帳戶
+      budgets.tsx            #     每月預算設定
+  api/                       # 讀寫 Supabase 的 hooks（TanStack Query）
+  providers/                 # 登入狀態、目前帳本
+  components/                # 共用元件；ui/ 是按鈕、輸入框等基本元件
+  constants/theme.ts         # 顏色、間距、字型
+  lib/                       # 金額、日期、統計、錯誤訊息等純函式（有單元測試）
+  types/database.ts          # 由 Supabase 產生的資料庫型別（不要手改）
+supabase/migrations/         # 資料庫結構變更（SQL）
+supabase/tests/rls_check.sql # 權限與資料完整性檢查
+assets/                      # 圖示、啟動畫面（目前是 Expo 預設圖，上架前要換）
+app.json                     # App 設定：名稱、Bundle ID、圖示…
+eas.json                     # EAS Build / Submit 設定
 ```
 
 ## Supabase 設定
@@ -72,7 +91,9 @@ eas.json               # EAS Build / Submit 設定
 後端專案 `keepmoney`（東京 ap-northeast-1，免費方案）已建立，`.env.example` 裡就是它的 URL 與 publishable key：
 
 1. `cp .env.example .env`
-2. 重新啟動 `npm start`，到 App 的「設定」頁按「測試連線」。
+2. 重新啟動 `npm start`，註冊一個帳號就能開始記帳。
+
+**Email 驗證**：Supabase 預設要求新帳號先點確認信。點信中連結後，手機瀏覽器顯示「無法開啟網頁」是正常的（還沒有設定網站網址），帳號已完成驗證，回到 App 登入即可。另外 Supabase 內建的寄信服務每小時只能寄少量信件，開發測試時可以到 Dashboard → Authentication → Sign In / Providers → Email 關閉「Confirm email」，上架前再打開並設定自己的寄信服務（SMTP）。
 
 安全規則：
 
@@ -108,7 +129,7 @@ eas.json               # EAS Build / Submit 設定
 
 - `occurred_on`（交易日期）沒有預設值：資料庫是 UTC，日期由 App 依使用者當地時間填入。
 - 刪除使用者時，會一併刪除他單獨擁有的帳本與其中所有資料（App Store 要求提供「刪除帳號」）。
-- 定期收支目前只有範本，自動產生交易的排程之後再做。
+- 定期收支目前只有資料表，設定畫面與自動產生交易之後再做。
 
 ### 修改資料表的流程
 

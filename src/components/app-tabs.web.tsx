@@ -6,7 +6,7 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
@@ -19,8 +19,14 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>首頁</TabButton>
+          <TabTrigger name="index" href="/" asChild>
+            <TabButton>明細</TabButton>
+          </TabTrigger>
+          <TabTrigger name="stats" href="/stats" asChild>
+            <TabButton>統計</TabButton>
+          </TabTrigger>
+          <TabTrigger name="accounts" href="/accounts" asChild>
+            <TabButton>帳戶</TabButton>
           </TabTrigger>
           <TabTrigger name="settings" href="/settings" asChild>
             <TabButton>設定</TabButton>
@@ -46,12 +52,18 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
 }
 
 export function CustomTabList(props: TabListProps) {
+  // 手機寬度放不下品牌名稱和四個分頁，窄螢幕只顯示分頁
+  const showBrand = useWindowDimensions().width >= 520;
   return (
     <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          KeepMoney
-        </ThemedText>
+      <ThemedView
+        type="backgroundElement"
+        style={[styles.innerContainer, !showBrand && styles.innerContainerCompact]}>
+        {showBrand && (
+          <ThemedText type="smallBold" style={styles.brandText}>
+            KeepMoney
+          </ThemedText>
+        )}
 
         {props.children}
       </ThemedView>
@@ -77,6 +89,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: Spacing.two,
     maxWidth: MaxContentWidth,
+  },
+  innerContainerCompact: {
+    paddingHorizontal: Spacing.two,
+    justifyContent: 'space-around',
   },
   brandText: {
     marginRight: 'auto',
