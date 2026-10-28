@@ -58,8 +58,10 @@ src/
   hooks/               # 共用 hooks
   lib/
     env.ts             # 讀取 EXPO_PUBLIC_* 環境變數
-    supabase.ts        # Supabase client（登入狀態存在 AsyncStorage）
+    supabase.ts        # Supabase client（帶資料庫型別，登入狀態存在 AsyncStorage）
     check-supabase-connection.ts
+  types/database.ts    # 由 Supabase 產生的資料庫型別（不要手改）
+supabase/migrations/   # 資料庫結構變更（SQL）
 assets/                # 圖示、啟動畫面（目前是 Expo 預設圖，上架前要換）
 app.json               # App 設定：名稱、Bundle ID、圖示…
 eas.json               # EAS Build / Submit 設定
@@ -67,14 +69,52 @@ eas.json               # EAS Build / Submit 設定
 
 ## Supabase 設定
 
-1. 到 [Supabase Dashboard](https://supabase.com/dashboard) 建立新專案。區域建議選 **Tokyo（ap-northeast-1）** 或 **Singapore（ap-southeast-1）**，台灣連線延遲較低。
-2. 在專案的 **Connect**（或 **Settings → API Keys**）複製 Project URL 與 **publishable key**（`sb_publishable_...`），貼到 `.env`。
-3. 重新啟動 `npm start`，到 App 的「設定」頁按「測試連線」。
+後端專案 `keepmoney`（東京 ap-northeast-1，免費方案）已建立，`.env.example` 裡就是它的 URL 與 publishable key：
+
+1. `cp .env.example .env`
+2. 重新啟動 `npm start`，到 App 的「設定」頁按「測試連線」。
 
 安全規則：
 
 - App 裡只能放 **publishable key**。`sb_secret_...`／`service_role` key 有完整權限，絕對不能出現在 App 或 git 裡。
-- 每一張資料表都要**開啟 RLS（Row Level Security）**並寫好 policy，例如「使用者只能讀寫自己的帳目」。publishable key 是公開的，資料安全完全靠 RLS。
+- 每一張資料表都要**開啟 RLS（Row Level Security）**並寫好 policy。publishable key 是公開的，資料安全完全靠 RLS。
+- 免費方案的專案**閒置 7 天會被暫停**，到 Dashboard 按 Restore 即可恢復，資料不會消失。
+
+## 資料庫結構
+
+所有記帳資料都掛在「帳本」底下，權限一律由「帳本成員」決定。目前每人一本；之後要做家人／伴侶共用，只需要開放新增成員的流程，不必搬資料。
+
+| 資料表                     | 用途                                | 重點                                                  |
+| -------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| `profiles`                 | 使用者資料（顯示名稱）              | 註冊時自動建立                                        |
+| `ledgers`                  | 帳本                                | 註冊時自動建立「我的帳本」；幣別欄位預設 `TWD`        |
+| `ledger_members`           | 帳本成員與角色                      | `owner`／`editor` 可寫，`viewer` 只能看               |
+| `accounts`                 | 帳戶：現金、銀行、信用卡、電子支付… | 有期初餘額；不用的帳戶用 `is_archived` 封存           |
+| `categories`               | 收支分類                            | 可有一層子分類；新帳本自動建立 16 個預設分類          |
+| `transactions`             | 交易                                | `type`：`expense`／`income`／`transfer`；金額一律正數 |
+| `tags`、`transaction_tags` | 標籤（一筆交易可多個）              | 例如「旅行」「公司報帳」                              |
+| `budgets`                  | 每月預算                            | `category_id` 為空＝每月總預算；只能設在支出分類      |
+| `recurring_transactions`   | 定期收支範本                        | 每日／週／月／年 × 間隔；`next_occurs_on` 為下次日期  |
+| `account_balances`（view） | 各帳戶目前餘額                      | 期初 + 收入 + 轉入 − 支出 − 轉出                      |
+
+資料庫層就會擋下的錯誤（App 不必重複檢查也不會寫壞資料）：
+
+- 引用別本帳本的帳戶／分類／標籤
+- 支出用了收入分類（或反過來）、轉帳卻填了分類、轉帳轉給同一個帳戶
+- 金額 ≤ 0、預算設在收入分類、同一分類重複設預算
+- 有交易的帳戶或分類不能直接刪除（請封存）
+
+其他規則：
+
+- `occurred_on`（交易日期）沒有預設值：資料庫是 UTC，日期由 App 依使用者當地時間填入。
+- 刪除使用者時，會一併刪除他單獨擁有的帳本與其中所有資料（App Store 要求提供「刪除帳號」）。
+- 定期收支目前只有範本，自動產生交易的排程之後再做。
+
+### 修改資料表的流程
+
+1. 在 `supabase/migrations/` 新增 `<時間戳>_<說明>.sql`（不要改已經套用過的檔案）
+2. 套用到 Supabase（`npx supabase db push`，或在 Dashboard 的 SQL Editor 執行）
+3. 更新 TypeScript 型別：先 `npx supabase login`，再執行 `npm run db:types`（輸出到 `src/types/database.ts`）
 
 ## 上架 App Store 路線圖
 

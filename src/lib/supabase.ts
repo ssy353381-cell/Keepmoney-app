@@ -5,6 +5,7 @@ import { createClient, processLock } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 import { env, isSupabaseConfigured } from '@/lib/env';
+import type { Database } from '@/types/database';
 
 if (!isSupabaseConfigured) {
   throw new Error(
@@ -12,7 +13,7 @@ if (!isSupabaseConfigured) {
   );
 }
 
-export const supabase = createClient(env.supabaseUrl, env.supabasePublishableKey, {
+export const supabase = createClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
   auth: {
     // Web 沿用瀏覽器的 localStorage，手機上把登入狀態存在 AsyncStorage
     ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
