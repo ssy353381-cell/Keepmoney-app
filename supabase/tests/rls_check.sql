@@ -1,12 +1,25 @@
 -- =====================================================================
 -- 權限（RLS）與資料完整性檢查
 --
--- 用法：整段貼到 Supabase Dashboard → SQL Editor 執行，看最後的結果表，
---       每一列都應該是 ✅。
+-- 用法：在 Supabase Dashboard 切換到 keepmoney 專案（網址含 ypsvifalrikqhxydbyxd），
+--       整段貼到 SQL Editor 執行，看最後的結果表，每一列都應該是 ✅。
 -- 整段在同一個交易裡，最後 rollback：測試帳號與資料都不會留下。
 -- 修改資料表或 policy 之後請重跑一次。
 -- =====================================================================
 begin;
+
+-- 防呆：在別的專案執行時直接停止，不會動到那個專案
+do $$
+begin
+  if to_regclass('public.ledger_members') is null
+     or not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'profiles' and column_name = 'display_name'
+     ) then
+    raise exception '這個專案沒有 KeepMoney 的資料表：請在 Dashboard 左上角切換到 keepmoney 專案再執行';
+  end if;
+end;
+$$;
 
 create temp table results (n int, test text, outcome text);
 grant all on results to authenticated, anon;
