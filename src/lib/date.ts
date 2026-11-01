@@ -3,6 +3,9 @@ export type Month = { year: number; month: number };
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
+/** 月曆表頭（週日開始） */
+export const WEEKDAY_LABELS = WEEKDAYS;
+
 function pad(value: number): string {
   return String(value).padStart(2, '0');
 }
@@ -75,4 +78,21 @@ export function formatDayHeader(value: string, today: string = todayString()): s
 export function formatDateLabel(value: string): string {
   const date = parseDateString(value);
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}（週${WEEKDAYS[date.getDay()]}）`;
+}
+
+/**
+ * 月曆格子：一週從週日開始，第一天之前與最後一天之後補 null，
+ * 總數一定是 7 的倍數，可以直接依序排成每列 7 格
+ */
+export function calendarDays({ year, month }: Month): (string | null)[] {
+  const leading = new Date(year, month - 1, 1).getDay();
+  const lastDay = new Date(year, month, 0).getDate();
+  const cells: (string | null)[] = Array.from({ length: leading }, () => null);
+  for (let day = 1; day <= lastDay; day++) {
+    cells.push(`${year}-${pad(month)}-${pad(day)}`);
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+  return cells;
 }

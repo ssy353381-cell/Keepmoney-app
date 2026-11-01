@@ -55,7 +55,11 @@ export function FormScreen({ children }: PropsWithChildren) {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.formContent}>
+        <ScrollView
+          // iOS 26 起標題列是透明的，讓內容自動避開標題列
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.formContent}>
           <SafeAreaView edges={['bottom']} style={styles.formInner}>
             {children}
           </SafeAreaView>

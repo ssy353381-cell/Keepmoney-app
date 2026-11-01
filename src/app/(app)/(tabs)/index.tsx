@@ -87,7 +87,7 @@ export default function TransactionsScreen() {
           ListEmptyComponent={
             transactions.isPending ? (
               <ActivityIndicator style={styles.loading} />
-            ) : error ? null : (
+            ) : error ? undefined : (
               <EmptyState title="這個月還沒有記錄" description="點右下角的＋開始記帳" />
             )
           }

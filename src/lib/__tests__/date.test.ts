@@ -1,5 +1,6 @@
 import {
   addDays,
+  calendarDays,
   formatDayHeader,
   isValidDateString,
   monthOf,
@@ -56,5 +57,22 @@ describe('formatDayHeader', () => {
     expect(formatDayHeader('2026-10-28', '2026-10-28')).toBe('今天');
     expect(formatDayHeader('2026-10-27', '2026-10-28')).toBe('昨天');
     expect(formatDayHeader('2026-10-20', '2026-10-28')).toBe('10月20日 週二');
+  });
+});
+
+describe('calendarDays', () => {
+  it('2026 年 11 月：1 日是週日，不用補前面的空格', () => {
+    const cells = calendarDays({ year: 2026, month: 11 });
+    expect(cells[0]).toBe('2026-11-01');
+    expect(cells.filter(Boolean)).toHaveLength(30);
+    expect(cells.length % 7).toBe(0);
+  });
+
+  it('2026 年 10 月：1 日是週四，前面補 4 格', () => {
+    const cells = calendarDays({ year: 2026, month: 10 });
+    expect(cells.slice(0, 4)).toEqual([null, null, null, null]);
+    expect(cells[4]).toBe('2026-10-01');
+    expect(cells[cells.length - 1] === null || cells[cells.length - 1] === '2026-10-31').toBe(true);
+    expect(cells.length).toBe(35);
   });
 });

@@ -4,7 +4,7 @@
 
 | 項目     | 選擇                                                 |
 | -------- | ---------------------------------------------------- |
-| 框架     | Expo SDK 57、React Native 0.86、React 19             |
+| 框架     | Expo SDK 58、React Native 0.88、React 19.3           |
 | 導覽     | Expo Router（檔案即路由，`src/app/`）                |
 | 語言     | TypeScript（strict）                                 |
 | 後端     | Supabase（Postgres + Auth），`@supabase/supabase-js` |
@@ -12,18 +12,18 @@
 | 打包上架 | EAS Build / EAS Submit                               |
 | 程式品質 | ESLint、Prettier、Jest 單元測試、GitHub Actions CI   |
 
-> 為什麼是 SDK 57 而不是最新的 58？App Store 上的 Expo Go 目前只支援 SDK 57，用 57 可以直接拿手機掃 QR code 開發，不需要 Mac 或 Apple 開發者帳號。之後升級方式見[升級 SDK](#升級-sdk)。
+> 手機上的 Expo Go 只支援最新一版 SDK，而且會自動更新。Expo Go 更新到新 SDK 後，專案也要跟著升級才能用 Expo Go 開發，做法見[升級 SDK](#升級-sdk)。
 
 ## 功能
 
-| 分頁／畫面 | 內容                                                                             |
-| ---------- | -------------------------------------------------------------------------------- |
-| 登入／註冊 | Email + 密碼；註冊後自動建立「我的帳本」、現金帳戶與預設分類                     |
-| 明細       | 依月份切換、依日期分組；本月收入／支出／結餘；右下角＋記一筆，點一筆可編輯或刪除 |
-| 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期、備註、標籤                 |
-| 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類） |
-| 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                   |
-| 設定       | 帳號資訊、連線測試、登出、刪除帳號                                               |
+| 分頁／畫面 | 內容                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------ |
+| 登入／註冊 | Email + 密碼；註冊後自動建立「我的帳本」、現金帳戶與預設分類                         |
+| 明細       | 依月份切換、依日期分組；本月收入／支出／結餘；右下角＋記一筆，點一筆可編輯或刪除     |
+| 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期（今天／昨天或月曆）、備註、標籤 |
+| 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類）     |
+| 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                       |
+| 設定       | 帳號資訊、連線測試、登出、刪除帳號                                                   |
 
 ## 開發環境需求
 
@@ -153,11 +153,15 @@ eas.json                     # EAS Build / Submit 設定
 
 ## 升級 SDK
 
-等 Expo Go 支援 SDK 58，或決定改用 development build 時：
+手機的 Expo Go 顯示「Project is incompatible with this version of Expo Go」時，代表 Expo Go 已經更新到新 SDK，專案要跟著升級（以下用 SDK 59 舉例）：
 
 ```bash
-npx expo install expo@^58.0.0 --fix
+npm install expo@^59.0.0
+npx expo install --fix
 npx expo-doctor
+npm run check
 ```
 
-升級前先看 [Expo changelog](https://expo.dev/changelog) 的破壞性變更。
+1. 升級前先看 [Expo changelog](https://expo.dev/changelog) 與 Expo Router 的遷移指南，處理破壞性變更。
+2. 不要用 `--force` 或 `--legacy-peer-deps` 硬裝；遇到套件版本衝突時先找原因（SDK 58 升級時就是把有衝突的原生日期選擇器換成自製月曆）。
+3. 升級後用 `npx expo start --clear` 清除快取再測試。
