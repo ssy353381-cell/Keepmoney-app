@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { useProfile } from '@/api/profile';
+import { useDeleteMyAccount, useProfile } from '@/api/profile';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -25,6 +25,7 @@ export default function SettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [connection, setConnection] = useState<ConnectionResult | null>(null);
+  const deleteAccount = useDeleteMyAccount();
 
   async function handleSignOut() {
     if (!(await confirmAction('登出', '確定要登出嗎？', '登出'))) {
@@ -35,6 +36,23 @@ export default function SettingsScreen() {
     setSigningOut(false);
     if (signOutError) {
       setError(toErrorMessage(signOutError));
+    }
+  }
+
+  async function handleDeleteAccount() {
+    const confirmed = await confirmAction(
+      '刪除帳號',
+      '你的帳本、帳戶、所有記帳資料都會永久刪除，無法復原。確定要刪除帳號嗎？',
+      '永久刪除',
+    );
+    if (!confirmed) {
+      return;
+    }
+    setError(null);
+    try {
+      await deleteAccount.mutateAsync();
+    } catch (e) {
+      setError(toErrorMessage(e));
     }
   }
 
@@ -72,6 +90,19 @@ export default function SettingsScreen() {
 
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
       <Button title="登出" variant="danger" onPress={handleSignOut} loading={signingOut} />
+
+      <Card>
+        <ThemedText type="smallBold">刪除帳號</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          永久刪除你的帳號與所有記帳資料，刪除後無法復原。
+        </ThemedText>
+        <Button
+          title="刪除帳號"
+          variant="danger"
+          onPress={handleDeleteAccount}
+          loading={deleteAccount.isPending}
+        />
+      </Card>
 
       <ThemedText type="small" themeColor="textSecondary" style={styles.version}>
         KeepMoney {Constants.expoConfig?.version ?? ''}

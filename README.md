@@ -23,7 +23,7 @@
 | 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期、備註、標籤                 |
 | 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類） |
 | 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                   |
-| 設定       | 帳號資訊、連線測試、登出                                                         |
+| 設定       | 帳號資訊、連線測試、登出、刪除帳號                                               |
 
 ## 開發環境需求
 
@@ -128,7 +128,7 @@ eas.json                     # EAS Build / Submit 設定
 其他規則：
 
 - `occurred_on`（交易日期）沒有預設值：資料庫是 UTC，日期由 App 依使用者當地時間填入。
-- 刪除使用者時，會一併刪除他單獨擁有的帳本與其中所有資料（App Store 要求提供「刪除帳號」）。
+- 刪除使用者時，會一併刪除他單獨擁有的帳本與其中所有資料。App 的「設定 → 刪除帳號」呼叫資料庫函式 `delete_my_account()`，只能刪除呼叫者自己（App Store 要求提供刪除帳號）。
 - 定期收支目前只有資料表，設定畫面與自動產生交易之後再做。
 
 ### 修改資料表的流程
@@ -146,7 +146,7 @@ eas.json                     # EAS Build / Submit 設定
 - [ ] 在 EAS 設定環境變數 `EXPO_PUBLIC_SUPABASE_URL`、`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`（preview／production 環境）。`.env` 不會進 git，EAS Build 也讀不到，雲端打包要靠這一步
 - [ ] 換掉 App 圖示與啟動畫面（`assets/` 裡目前是 Expo 範本圖）
 - [ ] 準備隱私權政策網址；在 App Store Connect 填寫「App 隱私」問卷（會用到 Supabase 存的 email、記帳資料）
-- [ ] 有帳號註冊功能的話，Apple 規定 App 內必須提供「刪除帳號」
+- [x] 有帳號註冊功能的話，Apple 規定 App 內必須提供「刪除帳號」（設定頁已提供）
 - [ ] `npx eas-cli@latest build --platform ios --profile production`
 - [ ] `npx eas-cli@latest submit --platform ios` → 先上 TestFlight 測試
 - [ ] 準備 iPhone 截圖（目前 `supportsTablet: false`，不需要 iPad 截圖）並送審

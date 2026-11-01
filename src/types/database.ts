@@ -529,7 +529,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      delete_my_account: { Args: never; Returns: undefined }
     }
     Enums: {
       account_type:
