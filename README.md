@@ -27,7 +27,7 @@
 | 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期（今天／昨天或月曆）、備註、標籤                                                                                                              |
 | 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類）                                                                                                                  |
 | 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                                                                                                                                    |
-| 設定       | 帳號資訊、連線測試、登出、刪除帳號                                                                                                                                                                |
+| 設定       | 帳號資訊、不開 App 記帳（iPhone 捷徑＋Siri）、連線測試、登出、刪除帳號                                                                                                                            |
 
 ## 開發環境需求
 
@@ -77,6 +77,7 @@ src/
       (tabs)/                #     底部分頁：樹（index）、明細（transactions）、統計、帳戶、設定
       day/[date].tsx         #     某一天：大葉子與當天交易（彈出視窗）
       quick.tsx              #     快速記帳：一句話＋預覽（彈出視窗，`keepmoney://quick`）
+      quick-setup.tsx        #     不開 App 記帳：產生捷徑金鑰、設定 iPhone 捷徑步驟（彈出視窗）
       transaction/[id].tsx   #     記一筆／編輯記錄（id 為 new 代表新增）
       account/[id].tsx       #     新增／編輯帳戶
       budgets.tsx            #     每月預算設定
@@ -87,14 +88,39 @@ src/
   constants/theme.ts         # 顏色、間距、字型
   lib/                       # 金額、日期、統計、錯誤訊息等純函式（有單元測試）
                              #   quick-parse / quick-entry：一句話解析與分類、帳戶對應
+                             #   relative-time：金鑰「上次使用」的顯示文字；env 的 quickEntryUrl 是捷徑網址
                              #   daily-summary / leaf-color / leaf / tree / forest：樹葉的資料與幾何
   types/database.ts          # 由 Supabase 產生的資料庫型別（不要手改）
 supabase/migrations/         # 資料庫結構變更（SQL）
+supabase/functions/quick-entry/ # 快速記帳 Edge Function（捷徑呼叫的入口）
 supabase/tests/rls_check.sql # 權限與資料完整性檢查
 assets/                      # 圖示、啟動畫面（目前是 Expo 預設圖，上架前要換）
 app.json                     # App 設定：名稱、Bundle ID、圖示…
 eas.json                     # EAS Build / Submit 設定
 ```
+
+## iPhone 捷徑：不開 App 記帳
+
+在 iPhone 的「捷徑」App 建一個捷徑，之後說「嘿 Siri，記一筆」或按動作按鈕，說出「午餐 120」就會記下來。記下的帳會標成「待確認」，回到 App 首頁就會看到提醒。
+
+1. 在 App：設定 → 快速記帳 → 設定 iPhone 捷徑，產生金鑰（只會顯示一次，請馬上複製；一個帳號最多 5 把，遺失了就刪掉重產）。
+2. 打開「捷徑」App，點右上角「＋」新增捷徑，名稱取「記一筆」（Siri 就會聽這個名字）。
+3. 加入動作「聽寫文字」（語言選「中文（台灣）」）。想用打字的話改加「要求輸入」。
+4. 加入動作「取得 URL 的內容」：
+   - 網址：`https://<專案>.supabase.co/functions/v1/quick-entry`
+   - 方法：**POST**
+   - 標頭：`x-keepmoney-token` ＝ `<在 App 設定頁產生的金鑰>`
+   - 要求本文：**JSON**，欄位 `text`＝「聽寫的文字」，欄位 `date`＝「目前日期」（日期格式選「自訂」`yyyy-MM-dd`）
+5. 加入動作「顯示通知」，內容選「URL 的內容」。
+6. 說「嘿 Siri，記一筆」試試看。也可以到「設定 → 動作按鈕 → 捷徑」選它、「設定 → 輔助使用 → 觸控 → 背面輕點」設定輕點兩下執行，或加到控制中心、主畫面、鎖定畫面小工具。
+
+金鑰等同記帳密碼，任何拿到的人都能幫你記帳，不要分享或貼到公開的地方。
+
+### Edge Function
+
+- 位置：`supabase/functions/quick-entry/`；請求為 `POST`，JSON `{ "text": "午餐 120", "date": "YYYY-MM-DD" }`，回傳純文字（例如「✅ 已記下：午餐 $120（飲食・現金）」）。
+- 解析器與 App 共用：要修改時先改 `src/lib/quick-parse.ts`，再執行 `npm run sync:functions` 同步到 Edge Function。
+- 部署：`npx supabase functions deploy quick-entry --no-verify-jwt`（身分由金鑰決定，所以要關掉 JWT 驗證），或用 Supabase MCP 部署。
 
 ## Supabase 設定
 

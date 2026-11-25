@@ -9,3 +9,8 @@ export const env = {
 };
 
 export const isSupabaseConfigured = env.supabaseUrl !== '' && env.supabasePublishableKey !== '';
+
+/** 快速記帳 Edge Function 的網址（捷徑要呼叫的位置） */
+export function quickEntryUrl(supabaseUrl: string = env.supabaseUrl): string {
+  return `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/quick-entry`;
+}

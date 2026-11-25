@@ -15,6 +15,7 @@ export const ledgerKeys = {
     ['ledger', ledgerId, 'transactions', start, end] as const,
   yearTransactions: (ledgerId: string, year: number) =>
     ['ledger', ledgerId, 'year-transactions', year] as const,
+  quickTokens: (ledgerId: string) => ['ledger', ledgerId, 'quick-tokens'] as const,
   needsReview: (ledgerId: string) => ['ledger', ledgerId, 'needs-review'] as const,
   transaction: (ledgerId: string, id: string) => ['ledger', ledgerId, 'transaction', id] as const,
 };

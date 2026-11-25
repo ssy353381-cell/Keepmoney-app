@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -71,6 +72,18 @@ export default function SettingsScreen() {
         <Row label="暱稱" value={profile.data?.display_name ?? '—'} />
         <Row label="Email" value={user.email ?? '—'} />
         <Row label="帳本" value={ledger.name} />
+      </Card>
+
+      <Card>
+        <ThemedText type="smallBold">快速記帳（不開 App）</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          用 iPhone 捷徑和 Siri，說「午餐 120」就能記帳，不必打開 KeepMoney。
+        </ThemedText>
+        <Button
+          title="設定 iPhone 捷徑"
+          variant="secondary"
+          onPress={() => router.push('/quick-setup')}
+        />
       </Card>
 
       <Card>
