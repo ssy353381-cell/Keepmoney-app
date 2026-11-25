@@ -14,6 +14,7 @@ import {
   type TransactionType,
 } from '@/api/transactions';
 import { ThemedText } from '@/components/themed-text';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { ChipGroup } from '@/components/ui/chip-group';
@@ -31,7 +32,15 @@ import { amountToInput, parseAmount } from '@/lib/money';
 import { closeModal } from '@/lib/navigation';
 
 export default function TransactionScreen() {
-  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    date?: string;
+    type?: string;
+    amount?: string;
+    categoryId?: string;
+    note?: string;
+  }>();
+  const { id, date } = params;
   // 從「某一天」進來時，新記錄的預設日期是那一天
   const defaultDate = date && isValidDateString(date) ? date : todayString();
   const transactionId = id === 'new' ? null : id;
@@ -50,6 +59,7 @@ export default function TransactionScreen() {
       <>
         <Stack.Screen options={{ title: transactionId ? '編輯記錄' : '記一筆' }} />
         <TransactionForm
+          preset={transactionId === null ? readPreset(params, categories.data) : {}}
           key={transactionId ?? 'new'}
           transactionId={transactionId}
           initial={existing.data?.transaction ?? null}
@@ -80,7 +90,39 @@ export default function TransactionScreen() {
   return <LoadingView />;
 }
 
+type Preset = {
+  type?: TransactionType;
+  amount?: number;
+  categoryId?: string;
+  note?: string;
+};
+
+/** 讀取從快速記帳帶過來的預設值；不合法的參數一律忽略 */
+function readPreset(
+  params: { type?: string; amount?: string; categoryId?: string; note?: string },
+  categories: Category[],
+): Preset {
+  const type = TRANSACTION_TYPES.find((t) => t.value === params.type)?.value;
+  const amount = params.amount ? parseAmount(params.amount) : null;
+  const category = params.categoryId
+    ? categories.find((c) => c.id === params.categoryId)
+    : undefined;
+  const categoryOk =
+    category !== undefined &&
+    type !== undefined &&
+    type !== 'transfer' &&
+    category.kind === type &&
+    !category.is_archived;
+  return {
+    type,
+    amount: amount ?? undefined,
+    categoryId: categoryOk ? category.id : undefined,
+    note: params.note?.trim() ? params.note.trim().slice(0, 200) : undefined,
+  };
+}
+
 type TransactionFormProps = {
+  preset: Preset;
   transactionId: string | null;
   initial: Transaction | null;
   initialTagIds: string[];
@@ -91,6 +133,7 @@ type TransactionFormProps = {
 };
 
 function TransactionForm({
+  preset,
   transactionId,
   initial,
   initialTagIds,
@@ -105,15 +148,17 @@ function TransactionForm({
     (a) => !a.is_archived || a.id === initial?.account_id || a.id === initial?.to_account_id,
   );
 
-  const [type, setType] = useState<TransactionType>(initial?.type ?? 'expense');
-  const [amountText, setAmountText] = useState(amountToInput(initial?.amount));
-  const [categoryId, setCategoryId] = useState<string | null>(initial?.category_id ?? null);
+  const [type, setType] = useState<TransactionType>(initial?.type ?? preset.type ?? 'expense');
+  const [amountText, setAmountText] = useState(amountToInput(initial?.amount ?? preset.amount));
+  const [categoryId, setCategoryId] = useState<string | null>(
+    initial?.category_id ?? preset.categoryId ?? null,
+  );
   const [accountId, setAccountId] = useState<string | null>(
     initial?.account_id ?? selectableAccounts[0]?.id ?? null,
   );
   const [toAccountId, setToAccountId] = useState<string | null>(initial?.to_account_id ?? null);
   const [date, setDate] = useState(initial?.occurred_on ?? defaultDate);
-  const [note, setNote] = useState(initial?.note ?? '');
+  const [note, setNote] = useState(initial?.note ?? preset.note ?? '');
   const [tagIds, setTagIds] = useState<string[]>(initialTagIds);
   const [newTagName, setNewTagName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +239,8 @@ function TransactionForm({
           to_account_id: type === 'transfer' ? toAccountId : null,
           category_id: type === 'transfer' ? null : categoryId,
           note: note.trim() || null,
+          // 在完整表單儲存就是確認過了
+          needs_review: false,
         },
         tagIds,
       });
@@ -220,6 +267,11 @@ function TransactionForm({
 
   return (
     <FormScreen>
+      {initial?.needs_review && (
+        <Card>
+          <ThemedText type="small">這筆是快速記下的，確認分類、帳戶後按儲存就完成了</ThemedText>
+        </Card>
+      )}
       <SegmentedControl options={TRANSACTION_TYPES} value={type} onChange={changeType} />
 
       <TextField

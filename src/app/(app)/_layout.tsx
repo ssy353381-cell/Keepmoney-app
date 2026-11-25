@@ -12,6 +12,7 @@ export default function AppLayout() {
     <LedgerProvider>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="quick" options={{ presentation: 'modal', title: '快速記帳' }} />
         <Stack.Screen
           name="transaction/[id]"
           options={{ presentation: 'modal', title: '記一筆' }}

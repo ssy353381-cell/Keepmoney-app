@@ -17,7 +17,14 @@ export const TRANSACTION_TYPES: { value: TransactionType; label: string }[] = [
 
 export type TransactionInput = Pick<
   Transaction,
-  'type' | 'amount' | 'occurred_on' | 'account_id' | 'to_account_id' | 'category_id' | 'note'
+  | 'type'
+  | 'amount'
+  | 'occurred_on'
+  | 'account_id'
+  | 'to_account_id'
+  | 'category_id'
+  | 'note'
+  | 'needs_review'
 >;
 
 /** 某個月的交易，新到舊 */
@@ -45,7 +52,7 @@ export function useMonthTransactions(month: Month) {
 /** 樹與森林只需要的精簡欄位 */
 export type YearTransaction = Pick<
   Transaction,
-  'id' | 'type' | 'amount' | 'occurred_on' | 'created_at' | 'category_id'
+  'id' | 'type' | 'amount' | 'occurred_on' | 'created_at' | 'category_id' | 'needs_review'
 >;
 
 /** 整年的交易（精簡欄位），舊到新；首頁的樹與森林用 */
@@ -58,7 +65,7 @@ export function useYearTransactions(year: number) {
       fetchAllPages((from, to) =>
         supabase
           .from('transactions')
-          .select('id,type,amount,occurred_on,created_at,category_id')
+          .select('id,type,amount,occurred_on,created_at,category_id,needs_review')
           .eq('ledger_id', ledger.id)
           .gte('occurred_on', start)
           .lte('occurred_on', end)
@@ -67,6 +74,60 @@ export function useYearTransactions(year: number) {
           .order('id')
           .range(from, to),
       ),
+  });
+}
+
+/** 所有待確認（needs_review）的交易，新到舊 */
+export function useNeedsReviewTransactions() {
+  const ledger = useLedger();
+  return useQuery({
+    queryKey: ledgerKeys.needsReview(ledger.id),
+    queryFn: async () =>
+      unwrap(
+        await supabase
+          .from('transactions')
+          .select('*')
+          .eq('ledger_id', ledger.id)
+          .eq('needs_review', true)
+          .order('occurred_on', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('id')
+          .limit(500),
+      ),
+  });
+}
+
+export type QuickAddInput = {
+  type: 'expense' | 'income';
+  amount: number;
+  occurredOn: string;
+  categoryId: string | null;
+  accountId: string;
+  note: string | null;
+  needsReview: boolean;
+};
+
+/** App 內一句話快速記帳：新增一筆來源為 quick 的交易 */
+export function useQuickAdd() {
+  const ledger = useLedger();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: QuickAddInput) => {
+      check(
+        await supabase.from('transactions').insert({
+          ledger_id: ledger.id,
+          type: input.type,
+          amount: input.amount,
+          occurred_on: input.occurredOn,
+          category_id: input.categoryId,
+          account_id: input.accountId,
+          note: input.note,
+          needs_review: input.needsReview,
+          source: 'quick',
+        }),
+      );
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ledgerKeys.all(ledger.id) }),
   });
 }
 

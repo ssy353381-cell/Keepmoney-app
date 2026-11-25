@@ -45,7 +45,7 @@ export function TransactionRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title} ${amountText} ${subtitle}`}
+      accessibilityLabel={`${title}${t.needs_review ? ' 待確認' : ''} ${amountText} ${subtitle}`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
@@ -55,7 +55,18 @@ export function TransactionRow({
         <ThemedText>{icon}</ThemedText>
       </View>
       <View style={styles.text}>
-        <ThemedText numberOfLines={1}>{title}</ThemedText>
+        <View style={styles.titleRow}>
+          <ThemedText numberOfLines={1} style={styles.title}>
+            {title}
+          </ThemedText>
+          {t.needs_review && (
+            <View style={[styles.badge, { backgroundColor: theme.warningSubtle }]}>
+              <ThemedText type="small" style={[styles.badgeText, { color: theme.warning }]}>
+                待確認
+              </ThemedText>
+            </View>
+          )}
+        </View>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
           {subtitle}
         </ThemedText>
@@ -86,6 +97,23 @@ const styles = StyleSheet.create({
   text: {
     flex: 1,
     gap: Spacing.half,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  title: {
+    flexShrink: 1,
+  },
+  badge: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 1,
+    borderRadius: Spacing.two,
+  },
+  badgeText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   amount: {
     fontSize: 16,

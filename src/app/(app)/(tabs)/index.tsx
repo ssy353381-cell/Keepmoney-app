@@ -1,15 +1,16 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useBudgets } from '@/api/budgets';
-import { useYearTransactions } from '@/api/transactions';
+import { useNeedsReviewTransactions, useYearTransactions } from '@/api/transactions';
 import { ForestSvg } from '@/components/forest/forest-svg';
 import { TreeSvg } from '@/components/forest/tree-svg';
 import { SummaryTiles } from '@/components/summary-tiles';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Card } from '@/components/ui/card';
 import { Fab } from '@/components/ui/fab';
 import { MonthSwitcher } from '@/components/ui/month-switcher';
 import { WebTabBarInset } from '@/components/ui/screen';
@@ -35,6 +36,8 @@ export default function TreeScreen() {
   const [month, setMonth] = useState<Month>(() => monthOf(new Date()));
   const transactions = useYearTransactions(month.year);
   const budgets = useBudgets();
+  const needsReview = useNeedsReviewTransactions();
+  const reviewCount = needsReview.data?.length ?? 0;
 
   const today = todayString();
   const allTransactions = useMemo(() => transactions.data ?? [], [transactions.data]);
@@ -55,6 +58,7 @@ export default function TreeScreen() {
   function refresh() {
     transactions.refetch();
     budgets.refetch();
+    needsReview.refetch();
   }
 
   return (
@@ -74,6 +78,18 @@ export default function TreeScreen() {
           <SummaryTiles
             summary={summarize(mode === 'month' ? monthTransactions : allTransactions)}
           />
+
+          {reviewCount > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/transactions', params: { review: '1' } })}>
+              <Card>
+                <ThemedText type="small">
+                  🍃 有 {reviewCount >= 500 ? '500+' : reviewCount} 筆快速記下的帳待確認
+                </ThemedText>
+              </Card>
+            </Pressable>
+          )}
 
           {error ? (
             <ErrorView message={toErrorMessage(error)} onRetry={refresh} />
@@ -107,7 +123,7 @@ export default function TreeScreen() {
             />
           )}
         </ScrollView>
-        <Fab label="記一筆" onPress={() => router.push('/transaction/new')} />
+        <Fab label="記一筆" onPress={() => router.push('/quick')} />
       </SafeAreaView>
     </ThemedView>
   );
