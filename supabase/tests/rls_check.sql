@@ -246,21 +246,255 @@ $$;
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 快速記帳：捷徑金鑰與 quick_add
+-- ---------------------------------------------------------------------
+-- 暫存 Alice 建立的明文金鑰，供後面的測試使用
+create temp table qtoken (token text);
+grant select, insert on qtoken to authenticated, anon;
+
+-- Alice：建立金鑰、只能讀到非機密欄位
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+declare
+  t text;
+  cnt int;
+  lbl text;
+begin
+  begin
+    t := public.create_quick_entry_token((select alice_ledger from ids), '我的 iPhone');
+    insert into qtoken values (t);
+    insert into results values (31, 'Alice 建立捷徑金鑰：km_ 開頭、長度 51',
+      case when left(t, 3) = 'km_' and length(t) = 51 then '✅' else '❌ ' || coalesce(t, 'null') end);
+  exception when others then
+    insert into results values (31, 'Alice 建立捷徑金鑰：km_ 開頭、長度 51', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    perform token_hash from public.quick_entry_tokens;
+    insert into results values (32, 'Alice 不能讀取 token_hash 欄位', '❌ 讀取成功');
+  exception when insufficient_privilege then
+    insert into results values (32, 'Alice 不能讀取 token_hash 欄位', '✅ ' || sqlerrm);
+  when others then
+    insert into results values (32, 'Alice 不能讀取 token_hash 欄位', '❌ ' || sqlerrm);
+  end;
+
+  select count(*), min(label) into cnt, lbl from public.quick_entry_tokens;
+  insert into results values (33, 'Alice 讀得到自己的 1 把金鑰（id、label）',
+    case when cnt = 1 and lbl = '我的 iPhone' then '✅' else format('❌ %s 把／%s', cnt, lbl) end);
+end;
+$$;
+reset role;
+
+-- Bob：不能替 Alice 的帳本建立金鑰，也看不到 Alice 的金鑰
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+declare
+  cnt int;
+begin
+  begin
+    perform public.create_quick_entry_token((select alice_ledger from ids), 'Bob 偷建的');
+    insert into results values (34, 'Bob 不能替 Alice 的帳本建立金鑰', '❌ 建立成功');
+  exception when others then
+    insert into results values (34, 'Bob 不能替 Alice 的帳本建立金鑰',
+      case when sqlstate = '42501' then '✅ ' || sqlerrm else '❌ ' || sqlerrm end);
+  end;
+
+  select count(*) into cnt from public.quick_entry_tokens;
+  insert into results values (35, 'Bob 看不到 Alice 的金鑰', case when cnt = 0 then '✅' else '❌ ' || cnt end);
+end;
+$$;
+reset role;
+
+-- 未登入（anon）：只能透過 quick_add 記帳
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+
+do $$
+declare
+  t text := (select token from qtoken);
+  res json;
+begin
+  begin
+    res := public.quick_add(t, 'expense', 120, current_date, '午餐', '飲食');
+    insert into results values (36, 'anon 用金鑰快速記帳成功',
+      case when res ->> 'category_name' = '飲食' and (res ->> 'amount')::numeric = 120
+                and res ->> 'account_name' is not null
+           then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (36, 'anon 用金鑰快速記帳成功', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    res := public.quick_add(t, 'expense', 50, current_date, null, '不存在的分類');
+    insert into results values (38, '找不到分類名稱時，落在「其他」',
+      case when res ->> 'category_name' = '其他' then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (38, '找不到分類名稱時，落在「其他」', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    res := public.quick_add(t, 'expense', 30, current_date, null, ' 早餐 ');
+    insert into results values (39, '分類名稱可對到子分類（忽略前後空白）',
+      case when res ->> 'category_name' = '早餐' then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (39, '分類名稱可對到子分類（忽略前後空白）', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    perform public.quick_add('km_' || repeat('0', 48), 'expense', 10, current_date, null, null);
+    insert into results values (41, '錯誤的金鑰不能記帳', '❌ 記帳成功');
+  exception when others then
+    insert into results values (41, '錯誤的金鑰不能記帳',
+      case when sqlstate = '28000' then '✅ ' || sqlerrm else '❌ ' || sqlerrm end);
+  end;
+
+  begin
+    perform public.quick_add(null, 'expense', 10, current_date, null, null);
+    insert into results values (42, '沒有金鑰不能記帳', '❌ 記帳成功');
+  exception when others then
+    insert into results values (42, '沒有金鑰不能記帳',
+      case when sqlstate = '28000' then '✅ ' || sqlerrm else '❌ ' || sqlerrm end);
+  end;
+
+  begin
+    perform public.quick_add(t, 'transfer', 10, current_date, null, null);
+    insert into results values (43, '快速記帳不能記轉帳', '❌ 記帳成功');
+  exception when others then
+    insert into results values (43, '快速記帳不能記轉帳', '✅ ' || sqlerrm);
+  end;
+
+  begin
+    perform public.quick_add(t, 'expense', 0, current_date, null, null);
+    insert into results values (44, '快速記帳金額不能是 0', '❌ 記帳成功');
+  exception when others then
+    insert into results values (44, '快速記帳金額不能是 0', '✅ ' || sqlerrm);
+  end;
+
+  begin
+    perform public.quick_add(t, 'expense', 10.123, current_date, null, null);
+    insert into results values (45, '快速記帳金額不能超過兩位小數', '❌ 記帳成功');
+  exception when others then
+    insert into results values (45, '快速記帳金額不能超過兩位小數', '✅ ' || sqlerrm);
+  end;
+
+  begin
+    perform public.quick_add(t, 'expense', 10, current_date + 10, null, null);
+    insert into results values (46, '快速記帳日期不能是未來', '❌ 記帳成功');
+  exception when others then
+    insert into results values (46, '快速記帳日期不能是未來', '✅ ' || sqlerrm);
+  end;
+
+  begin
+    perform public.quick_add(t, 'expense', 10, current_date - 400, null, null);
+    insert into results values (47, '快速記帳日期不能早於一年前', '❌ 記帳成功');
+  exception when others then
+    insert into results values (47, '快速記帳日期不能早於一年前', '✅ ' || sqlerrm);
+  end;
+
+  begin
+    perform count(*) from public.transactions;
+    insert into results values (48, 'anon 不能直接讀取交易', '❌ 讀取成功');
+  exception when insufficient_privilege then
+    insert into results values (48, 'anon 不能直接讀取交易', '✅ ' || sqlerrm);
+  when others then
+    insert into results values (48, 'anon 不能直接讀取交易', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    perform count(*) from public.quick_entry_tokens;
+    insert into results values (49, 'anon 不能直接讀取捷徑金鑰', '❌ 讀取成功');
+  exception when insufficient_privilege then
+    insert into results values (49, 'anon 不能直接讀取捷徑金鑰', '✅ ' || sqlerrm);
+  when others then
+    insert into results values (49, 'anon 不能直接讀取捷徑金鑰', '❌ ' || sqlerrm);
+  end;
+end;
+$$;
+reset role;
+
+-- 以管理者身分檢查寫入的交易（預期的帳戶用查詢取得，不寫死）
+do $$
+declare
+  r record;
+  l uuid := (select alice_ledger from ids);
+  exp_account uuid;
+  used timestamptz;
+begin
+  select a.id into exp_account
+  from public.accounts a
+  where a.ledger_id = l and not a.is_archived
+  order by a.sort_order, a.created_at, a.id
+  limit 1;
+
+  select t.needs_review, t.source, t.created_by, t.account_id, t.amount, t.occurred_on, t.note, t.ledger_id, c.name as category_name
+    into r
+  from public.transactions t
+  join public.categories c on c.id = t.category_id
+  where t.ledger_id = l and t.note = '午餐';
+
+  insert into results values (37, '快速記帳的交易：待確認、來源 shortcut、建立者 Alice、分類「飲食」、預設帳戶',
+    case when r.needs_review and r.source = 'shortcut'
+              and r.created_by = '00000000-0000-4000-8000-0000000000a1'
+              and r.category_name = '飲食' and r.account_id = exp_account
+              and r.amount = 120 and r.occurred_on = current_date
+         then '✅' else '❌ ' || coalesce(r::text, 'null') end);
+
+  select last_used_at into used from public.quick_entry_tokens
+  where user_id = '00000000-0000-4000-8000-0000000000a1';
+  insert into results values (50, '快速記帳後更新金鑰的最後使用時間', case when used is not null then '✅' else '❌' end);
+end;
+$$;
+
+-- 頻率限制：補到每分鐘 20 筆後，第 21 筆要被擋下
+insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, needs_review, source, created_by)
+select t.ledger_id, 'expense', 1, current_date, t.account_id, t.category_id, true, 'shortcut', t.created_by
+from public.transactions t, generate_series(1, 17)
+where t.note = '午餐';
+
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+
+do $$
+begin
+  perform public.quick_add((select token from qtoken), 'expense', 10, current_date, null, null);
+  insert into results values (51, '每分鐘超過 20 筆快速記帳要被擋下', '❌ 記帳成功');
+exception when others then
+  insert into results values (51, '每分鐘超過 20 筆快速記帳要被擋下',
+    case when sqlerrm like '記太快了%' then '✅ ' || sqlerrm else '❌ ' || sqlerrm end);
+end;
+$$;
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 刪除帳號：Alice 單獨擁有的帳本與資料要一併刪除
 -- ---------------------------------------------------------------------
 do $$
 declare
   alice_ledger uuid := (select alice_ledger from ids);
   cnt int;
+  tokens_before int;
+  tokens_after int;
 begin
+  select count(*) into tokens_before from public.quick_entry_tokens
+  where user_id = '00000000-0000-4000-8000-0000000000a1';
+
   delete from auth.users where id = '00000000-0000-4000-8000-0000000000a1';
   select (select count(*) from public.ledgers where id = alice_ledger)
        + (select count(*) from public.transactions where ledger_id = alice_ledger)
        + (select count(*) from public.accounts where ledger_id = alice_ledger)
     into cnt;
-  insert into results values (40, '刪除帳號後，帳本、帳戶、交易一併刪除', case when cnt = 0 then '✅' else '❌ 剩 ' || cnt || ' 筆' end);
+  insert into results values (60, '刪除帳號後，帳本、帳戶、交易一併刪除', case when cnt = 0 then '✅' else '❌ 剩 ' || cnt || ' 筆' end);
+
+  select count(*) into tokens_after from public.quick_entry_tokens
+  where user_id = '00000000-0000-4000-8000-0000000000a1';
+  insert into results values (61, '刪除帳號後，捷徑金鑰一併刪除',
+    case when tokens_before > 0 and tokens_after = 0 then '✅' else format('❌ 刪除前 %s／刪除後 %s', tokens_before, tokens_after) end);
 exception when others then
-  insert into results values (40, '刪除帳號後，帳本、帳戶、交易一併刪除', '❌ ' || sqlerrm);
+  insert into results values (60, '刪除帳號後，帳本、帳戶、交易、捷徑金鑰一併刪除', '❌ ' || sqlerrm);
 end;
 $$;
 

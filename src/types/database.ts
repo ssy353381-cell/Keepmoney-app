@@ -237,6 +237,61 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_entry_tokens: {
+        Row: {
+          created_at: string
+          default_account_id: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          ledger_id: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_account_id?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          ledger_id: string
+          token_hash: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          default_account_id?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          ledger_id?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_entry_tokens_ledger_id_default_account_id_fkey"
+            columns: ["ledger_id", "default_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_balances"
+            referencedColumns: ["ledger_id", "account_id"]
+          },
+          {
+            foreignKeyName: "quick_entry_tokens_ledger_id_default_account_id_fkey"
+            columns: ["ledger_id", "default_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["ledger_id", "id"]
+          },
+          {
+            foreignKeyName: "quick_entry_tokens_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "ledgers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_transactions: {
         Row: {
           account_id: string
@@ -418,9 +473,11 @@ export type Database = {
           created_by: string | null
           id: string
           ledger_id: string
+          needs_review: boolean
           note: string | null
           occurred_on: string
           recurring_id: string | null
+          source: Database["public"]["Enums"]["transaction_source"]
           to_account_id: string | null
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
@@ -434,9 +491,11 @@ export type Database = {
           created_by?: string | null
           id?: string
           ledger_id: string
+          needs_review?: boolean
           note?: string | null
           occurred_on: string
           recurring_id?: string | null
+          source?: Database["public"]["Enums"]["transaction_source"]
           to_account_id?: string | null
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -450,9 +509,11 @@ export type Database = {
           created_by?: string | null
           id?: string
           ledger_id?: string
+          needs_review?: boolean
           note?: string | null
           occurred_on?: string
           recurring_id?: string | null
+          source?: Database["public"]["Enums"]["transaction_source"]
           to_account_id?: string | null
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -529,7 +590,26 @@ export type Database = {
       }
     }
     Functions: {
+      create_quick_entry_token: {
+        Args: {
+          p_default_account_id?: string
+          p_label?: string
+          p_ledger_id: string
+        }
+        Returns: string
+      }
       delete_my_account: { Args: never; Returns: undefined }
+      quick_add: {
+        Args: {
+          p_amount: number
+          p_category_name?: string
+          p_note?: string
+          p_occurred_on: string
+          p_token: string
+          p_type: Database["public"]["Enums"]["transaction_type"]
+        }
+        Returns: Json
+      }
     }
     Enums: {
       account_type:
@@ -542,6 +622,7 @@ export type Database = {
       category_kind: "expense" | "income"
       ledger_role: "owner" | "editor" | "viewer"
       recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly"
+      transaction_source: "app" | "quick" | "shortcut" | "invoice_qr" | "import"
       transaction_type: "expense" | "income" | "transfer"
     }
     CompositeTypes: {
@@ -681,6 +762,7 @@ export const Constants = {
       category_kind: ["expense", "income"],
       ledger_role: ["owner", "editor", "viewer"],
       recurrence_frequency: ["daily", "weekly", "monthly", "yearly"],
+      transaction_source: ["app", "quick", "shortcut", "invoice_qr", "import"],
       transaction_type: ["expense", "income", "transfer"],
     },
   },
