@@ -14,6 +14,7 @@
     "format:check": "prettier --check .",
     "test": "jest",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm test -- --ci",
+    "sync:functions": "node scripts/sync-functions.js",
     "db:types": "npx --yes supabase gen types typescript --project-id ypsvifalrikqhxydbyxd > src/types/database.ts"
   },
   "dependencies": {

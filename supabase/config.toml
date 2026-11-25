@@ -1,0 +1,5 @@
+project_id = "ypsvifalrikqhxydbyxd"
+
+# 捷徑／Siri 呼叫，身分由「捷徑金鑰」決定，不使用 Supabase JWT
+[functions.quick-entry]
+verify_jwt = false
