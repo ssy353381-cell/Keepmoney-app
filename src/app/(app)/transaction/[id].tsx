@@ -24,14 +24,16 @@ import { ErrorView, LoadingView } from '@/components/ui/status-views';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { todayString } from '@/lib/date';
+import { isValidDateString, todayString } from '@/lib/date';
 import { confirmAction } from '@/lib/dialogs';
 import { toErrorMessage } from '@/lib/errors';
 import { amountToInput, parseAmount } from '@/lib/money';
 import { closeModal } from '@/lib/navigation';
 
 export default function TransactionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
+  // 從「某一天」進來時，新記錄的預設日期是那一天
+  const defaultDate = date && isValidDateString(date) ? date : todayString();
   const transactionId = id === 'new' ? null : id;
   const existing = useTransaction(transactionId);
   const accounts = useAccounts();
@@ -52,6 +54,7 @@ export default function TransactionScreen() {
           transactionId={transactionId}
           initial={existing.data?.transaction ?? null}
           initialTagIds={existing.data?.tagIds ?? []}
+          defaultDate={defaultDate}
           accounts={accounts.data}
           categories={categories.data}
           tags={tags.data}
@@ -81,6 +84,7 @@ type TransactionFormProps = {
   transactionId: string | null;
   initial: Transaction | null;
   initialTagIds: string[];
+  defaultDate: string;
   accounts: Account[];
   categories: Category[];
   tags: Tag[];
@@ -90,6 +94,7 @@ function TransactionForm({
   transactionId,
   initial,
   initialTagIds,
+  defaultDate,
   accounts,
   categories,
   tags,
@@ -107,7 +112,7 @@ function TransactionForm({
     initial?.account_id ?? selectableAccounts[0]?.id ?? null,
   );
   const [toAccountId, setToAccountId] = useState<string | null>(initial?.to_account_id ?? null);
-  const [date, setDate] = useState(initial?.occurred_on ?? todayString());
+  const [date, setDate] = useState(initial?.occurred_on ?? defaultDate);
   const [note, setNote] = useState(initial?.note ?? '');
   const [tagIds, setTagIds] = useState<string[]>(initialTagIds);
   const [newTagName, setNewTagName] = useState('');

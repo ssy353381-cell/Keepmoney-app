@@ -13,6 +13,11 @@ export default function AppTabs() {
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}>
       <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>樹</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'leaf', selected: 'leaf.fill' }} md="park" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="transactions">
         <NativeTabs.Trigger.Label>明細</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }}

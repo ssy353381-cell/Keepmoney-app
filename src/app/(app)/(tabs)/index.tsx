@@ -1,97 +1,112 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAccounts } from '@/api/accounts';
-import { useCategories } from '@/api/categories';
-import { useMonthTransactions } from '@/api/transactions';
+import { useBudgets } from '@/api/budgets';
+import { useYearTransactions } from '@/api/transactions';
+import { ForestSvg } from '@/components/forest/forest-svg';
+import { TreeSvg } from '@/components/forest/tree-svg';
 import { SummaryTiles } from '@/components/summary-tiles';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { TransactionRow } from '@/components/transaction-row';
 import { Fab } from '@/components/ui/fab';
 import { MonthSwitcher } from '@/components/ui/month-switcher';
 import { WebTabBarInset } from '@/components/ui/screen';
-import { EmptyState, ErrorView } from '@/components/ui/status-views';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { ErrorView } from '@/components/ui/status-views';
+import { YearSwitcher } from '@/components/ui/year-switcher';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { formatDayHeader, monthOf, type Month } from '@/lib/date';
+import { summarizeDays, summarizeMonths } from '@/lib/daily-summary';
+import { monthOf, monthRange, todayString, type Month } from '@/lib/date';
 import { toErrorMessage } from '@/lib/errors';
-import { groupByDate } from '@/lib/group-by-date';
-import { formatMoney, sumAmounts } from '@/lib/money';
 import { summarize } from '@/lib/stats';
 
-export default function TransactionsScreen() {
-  const [month, setMonth] = useState<Month>(() => monthOf(new Date()));
-  const transactions = useMonthTransactions(month);
-  const categories = useCategories();
-  const accounts = useAccounts();
+type Mode = 'month' | 'year';
 
-  const items = transactions.data ?? [];
-  const sections = groupByDate(items);
-  const categoriesById = new Map((categories.data ?? []).map((c) => [c.id, c]));
-  const accountsById = new Map((accounts.data ?? []).map((a) => [a.id, a]));
-  const error = transactions.error ?? categories.error ?? accounts.error;
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'month', label: '月' },
+  { value: 'year', label: '年' },
+];
+
+/** 首頁：一天一片葉、一個月一棵樹、一年一座森林 */
+export default function TreeScreen() {
+  const [mode, setMode] = useState<Mode>('month');
+  const [month, setMonth] = useState<Month>(() => monthOf(new Date()));
+  const transactions = useYearTransactions(month.year);
+  const budgets = useBudgets();
+
+  const today = todayString();
+  const allTransactions = useMemo(() => transactions.data ?? [], [transactions.data]);
+  const days = useMemo(() => summarizeDays(allTransactions), [allTransactions]);
+  const months = useMemo(
+    () => summarizeMonths(month.year, allTransactions),
+    [month.year, allTransactions],
+  );
+  const monthTransactions = useMemo(() => {
+    const { start, end } = monthRange(month);
+    return allTransactions.filter((t) => t.occurred_on >= start && t.occurred_on <= end);
+  }, [allTransactions, month]);
+  const monthBudget = budgets.data?.find((b) => b.category_id === null)?.amount ?? null;
+
+  const error = transactions.error ?? budgets.error;
+  const recordedDays = months[month.month - 1]?.recordedDays ?? 0;
 
   function refresh() {
     transactions.refetch();
-    categories.refetch();
-    accounts.refetch();
+    budgets.refetch();
   }
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-        <SectionList
-          sections={sections}
-          keyExtractor={(t) => t.id}
-          stickySectionHeadersEnabled={false}
+        <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl refreshing={transactions.isRefetching} onRefresh={refresh} />
-          }
-          ListHeaderComponent={
-            <View style={styles.header}>
-              <MonthSwitcher month={month} onChange={setMonth} />
-              <SummaryTiles summary={summarize(items)} />
-              {error && <ErrorView message={toErrorMessage(error)} onRetry={refresh} />}
-            </View>
-          }
-          renderSectionHeader={({ section }) => {
-            const dayExpense = sumAmounts(
-              section.data.filter((t) => t.type === 'expense').map((t) => t.amount),
-            );
-            return (
-              <View style={styles.sectionHeader}>
-                <ThemedText type="smallBold" themeColor="textSecondary">
-                  {formatDayHeader(section.date)}
+          }>
+          <SegmentedControl options={MODES} value={mode} onChange={setMode} />
+          {mode === 'month' ? (
+            <MonthSwitcher month={month} onChange={setMonth} />
+          ) : (
+            <YearSwitcher year={month.year} onChange={(year) => setMonth({ ...month, year })} />
+          )}
+          <SummaryTiles
+            summary={summarize(mode === 'month' ? monthTransactions : allTransactions)}
+          />
+
+          {error ? (
+            <ErrorView message={toErrorMessage(error)} onRetry={refresh} />
+          ) : transactions.isPending ? (
+            <ActivityIndicator style={styles.loading} />
+          ) : mode === 'month' ? (
+            <>
+              <TreeSvg
+                month={month}
+                days={days}
+                today={today}
+                monthBudget={monthBudget}
+                onPressDay={(date) => router.push({ pathname: '/day/[date]', params: { date } })}
+              />
+              {recordedDays === 0 && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  點右下角＋記一筆，樹就會長出葉子
                 </ThemedText>
-                {dayExpense > 0 && (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    支出 {formatMoney(dayExpense)}
-                  </ThemedText>
-                )}
-              </View>
-            );
-          }}
-          renderItem={({ item }) => (
-            <TransactionRow
-              transaction={item}
-              categoriesById={categoriesById}
-              accountsById={accountsById}
-              onPress={() =>
-                router.push({ pathname: '/transaction/[id]', params: { id: item.id } })
-              }
+              )}
+            </>
+          ) : (
+            <ForestSvg
+              year={month.year}
+              months={months}
+              today={today}
+              monthBudget={monthBudget}
+              onPressMonth={(selected) => {
+                setMonth({ year: month.year, month: selected });
+                setMode('month');
+              }}
             />
           )}
-          ListEmptyComponent={
-            transactions.isPending ? (
-              <ActivityIndicator style={styles.loading} />
-            ) : error ? undefined : (
-              <EmptyState title="這個月還沒有記錄" description="點右下角的＋開始記帳" />
-            )
-          }
-        />
+        </ScrollView>
         <Fab label="記一筆" onPress={() => router.push('/transaction/new')} />
       </SafeAreaView>
     </ThemedView>
@@ -109,23 +124,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   content: {
+    gap: Spacing.three,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three + WebTabBarInset,
     // 留空間給底部分頁列和＋按鈕
     paddingBottom: BottomTabInset + Spacing.six + Spacing.six,
   },
-  header: {
-    gap: Spacing.three,
-    marginBottom: Spacing.two,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.one,
-    paddingHorizontal: Spacing.two,
-  },
   loading: {
     marginTop: Spacing.six,
+  },
+  hint: {
+    textAlign: 'center',
   },
 });

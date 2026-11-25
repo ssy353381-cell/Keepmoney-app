@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { check, fetchAllPages, ledgerKeys, unwrap } from '@/api/keys';
-import { monthRange, type Month } from '@/lib/date';
+import { monthRange, yearRange, type Month } from '@/lib/date';
 import { supabase } from '@/lib/supabase';
 import { useLedger } from '@/providers/ledger-provider';
 import type { Enums, Tables } from '@/types/database';
@@ -36,6 +36,34 @@ export function useMonthTransactions(month: Month) {
           .lte('occurred_on', end)
           .order('occurred_on', { ascending: false })
           .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to),
+      ),
+  });
+}
+
+/** 樹與森林只需要的精簡欄位 */
+export type YearTransaction = Pick<
+  Transaction,
+  'id' | 'type' | 'amount' | 'occurred_on' | 'created_at' | 'category_id'
+>;
+
+/** 整年的交易（精簡欄位），舊到新；首頁的樹與森林用 */
+export function useYearTransactions(year: number) {
+  const ledger = useLedger();
+  const { start, end } = yearRange(year);
+  return useQuery({
+    queryKey: ledgerKeys.yearTransactions(ledger.id, year),
+    queryFn: (): Promise<YearTransaction[]> =>
+      fetchAllPages((from, to) =>
+        supabase
+          .from('transactions')
+          .select('id,type,amount,occurred_on,created_at,category_id')
+          .eq('ledger_id', ledger.id)
+          .gte('occurred_on', start)
+          .lte('occurred_on', end)
+          .order('occurred_on', { ascending: true })
+          .order('created_at', { ascending: true })
           .order('id')
           .range(from, to),
       ),

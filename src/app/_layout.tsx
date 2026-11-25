@@ -54,6 +54,10 @@ function RootNavigator() {
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="sign-up" />
       </Stack.Protected>
+      {/* 開發預覽：不需登入，只在開發模式存在 */}
+      <Stack.Protected guard={__DEV__}>
+        <Stack.Screen name="dev-preview" />
+      </Stack.Protected>
     </Stack>
   );
 }

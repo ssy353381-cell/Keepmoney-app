@@ -54,6 +54,26 @@ export function monthRange({ year, month }: Month): { start: string; end: string
   return { start: `${year}-${pad(month)}-01`, end: `${year}-${pad(month)}-${pad(lastDay)}` };
 }
 
+/** 某月有幾天 */
+export function daysInMonth({ year, month }: Month): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/** 整年第一天與最後一天（含） */
+export function yearRange(year: number): { start: string; end: string } {
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
+}
+
+/** 比較兩個 YYYY-MM-DD：前者較早回傳負數、相同回傳 0、較晚回傳正數 */
+export function compareDateString(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** 是否在今天之後（不含今天） */
+export function isFutureDate(value: string, today: string = todayString()): boolean {
+  return compareDateString(value, today) > 0;
+}
+
 export function isSameMonth(a: Month, b: Month): boolean {
   return a.year === b.year && a.month === b.month;
 }

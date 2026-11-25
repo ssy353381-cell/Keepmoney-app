@@ -25,6 +25,10 @@ export const Colors = {
     warning: '#C77700',
     warningSubtle: '#FFEDB3',
     dangerSubtle: '#FFDBDC',
+    // 樹：樹幹／樹枝、小芽、葉子外框
+    trunk: '#8B6B4A',
+    bud: '#9CB86B',
+    leafOutline: '#4F7B33',
   },
   dark: {
     text: '#ffffff',
@@ -42,6 +46,9 @@ export const Colors = {
     warning: '#D08C00',
     warningSubtle: '#3F2700',
     dangerSubtle: '#500F1C',
+    trunk: '#A68660',
+    bud: '#7C9A55',
+    leafOutline: '#2E4A1C',
   },
 } as const;
 

@@ -21,6 +21,9 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="index" href="/" asChild>
+            <TabButton>樹</TabButton>
+          </TabTrigger>
+          <TabTrigger name="transactions" href="/transactions" asChild>
             <TabButton>明細</TabButton>
           </TabTrigger>
           <TabTrigger name="stats" href="/stats" asChild>
@@ -58,7 +61,7 @@ export function TabButton({ children, isFocused, ref, ...props }: TabTriggerSlot
 }
 
 export function CustomTabList(props: TabListProps) {
-  // 手機寬度放不下品牌名稱和四個分頁，窄螢幕只顯示分頁
+  // 手機寬度放不下品牌名稱和五個分頁，窄螢幕只顯示分頁
   const showBrand = useWindowDimensions().width >= 520;
   return (
     <View {...props} style={styles.tabListContainer}>

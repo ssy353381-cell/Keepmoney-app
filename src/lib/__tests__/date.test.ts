@@ -1,12 +1,16 @@
 import {
   addDays,
   calendarDays,
+  compareDateString,
+  daysInMonth,
   formatDayHeader,
+  isFutureDate,
   isValidDateString,
   monthOf,
   monthRange,
   shiftMonth,
   toDateString,
+  yearRange,
 } from '@/lib/date';
 
 describe('toDateString', () => {
@@ -74,5 +78,35 @@ describe('calendarDays', () => {
     expect(cells[4]).toBe('2026-10-01');
     expect(cells[cells.length - 1] === null || cells[cells.length - 1] === '2026-10-31').toBe(true);
     expect(cells.length).toBe(35);
+  });
+});
+
+describe('daysInMonth', () => {
+  it('各月份天數（含閏年）', () => {
+    expect(daysInMonth({ year: 2026, month: 1 })).toBe(31);
+    expect(daysInMonth({ year: 2026, month: 2 })).toBe(28);
+    expect(daysInMonth({ year: 2028, month: 2 })).toBe(29);
+    expect(daysInMonth({ year: 2026, month: 4 })).toBe(30);
+    expect(daysInMonth({ year: 2026, month: 12 })).toBe(31);
+  });
+});
+
+describe('yearRange', () => {
+  it('回傳整年第一天與最後一天', () => {
+    expect(yearRange(2026)).toEqual({ start: '2026-01-01', end: '2026-12-31' });
+  });
+});
+
+describe('compareDateString / isFutureDate', () => {
+  it('比較日期先後', () => {
+    expect(compareDateString('2026-10-27', '2026-10-28')).toBeLessThan(0);
+    expect(compareDateString('2026-10-28', '2026-10-28')).toBe(0);
+    expect(compareDateString('2026-11-01', '2026-10-31')).toBeGreaterThan(0);
+  });
+
+  it('今天不算未來，明天才是', () => {
+    expect(isFutureDate('2026-10-28', '2026-10-28')).toBe(false);
+    expect(isFutureDate('2026-10-29', '2026-10-28')).toBe(true);
+    expect(isFutureDate('2026-10-27', '2026-10-28')).toBe(false);
   });
 });
