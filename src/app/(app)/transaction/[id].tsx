@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { accountTypeInfo, useAccounts, type Account } from '@/api/accounts';
 import { useCategories, type Category } from '@/api/categories';
@@ -10,9 +10,11 @@ import {
   useDeleteTransaction,
   useSaveTransaction,
   useTransaction,
+  type ReceiptChange,
   type Transaction,
   type TransactionType,
 } from '@/api/transactions';
+import { ReceiptPhotoField } from '@/components/receipt-photo-field';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +30,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { isValidDateString, todayString } from '@/lib/date';
 import { confirmAction } from '@/lib/dialogs';
 import { toErrorMessage } from '@/lib/errors';
+import { readInvoiceNumber } from '@/lib/invoice-scan';
 import { amountToInput, parseAmount } from '@/lib/money';
 import { closeModal } from '@/lib/navigation';
 
@@ -39,6 +42,8 @@ export default function TransactionScreen() {
     amount?: string;
     categoryId?: string;
     note?: string;
+    invoiceNumber?: string;
+    photo?: string;
   }>();
   const { id, date } = params;
   // 從「某一天」進來時，新記錄的預設日期是那一天
@@ -95,11 +100,20 @@ type Preset = {
   amount?: number;
   categoryId?: string;
   note?: string;
+  invoiceNumber?: string;
+  openCamera?: boolean;
 };
 
 /** 讀取從快速記帳帶過來的預設值；不合法的參數一律忽略 */
 function readPreset(
-  params: { type?: string; amount?: string; categoryId?: string; note?: string },
+  params: {
+    type?: string;
+    amount?: string;
+    categoryId?: string;
+    note?: string;
+    invoiceNumber?: string;
+    photo?: string;
+  },
   categories: Category[],
 ): Preset {
   const type = TRANSACTION_TYPES.find((t) => t.value === params.type)?.value;
@@ -118,6 +132,8 @@ function readPreset(
     amount: amount ?? undefined,
     categoryId: categoryOk ? category.id : undefined,
     note: params.note?.trim() ? params.note.trim().slice(0, 200) : undefined,
+    invoiceNumber: readInvoiceNumber(params.invoiceNumber) ?? undefined,
+    openCamera: params.photo === 'camera',
   };
 }
 
@@ -161,7 +177,10 @@ function TransactionForm({
   const [note, setNote] = useState(initial?.note ?? preset.note ?? '');
   const [tagIds, setTagIds] = useState<string[]>(initialTagIds);
   const [newTagName, setNewTagName] = useState('');
+  const [receipt, setReceipt] = useState<ReceiptChange>({ kind: 'keep' });
   const [error, setError] = useState<string | null>(null);
+  // 新記錄來自掃描發票時才有；編輯時顯示資料庫裡已有的發票號碼
+  const invoiceNumber = initial ? initial.invoice_number : (preset.invoiceNumber ?? null);
 
   const save = useSaveTransaction();
   const remove = useDeleteTransaction();
@@ -229,7 +248,7 @@ function TransactionForm({
 
     setError(null);
     try {
-      await save.mutateAsync({
+      const result = await save.mutateAsync({
         id: transactionId,
         input: {
           type,
@@ -243,7 +262,14 @@ function TransactionForm({
           needs_review: false,
         },
         tagIds,
+        invoiceNumber: transactionId ? null : invoiceNumber,
+        receipt,
+        oldReceiptPath: initial?.receipt_path ?? null,
       });
+      if (result.photoError) {
+        // 交易已經存好，只有照片失敗：告知後關閉，避免使用者重按儲存而重複記帳
+        notify('記錄已儲存', `記錄已儲存，但照片上傳失敗：${result.photoError}`);
+      }
       closeModal();
     } catch (e) {
       setError(toErrorMessage(e));
@@ -329,12 +355,21 @@ function TransactionForm({
 
       <DateField value={date} onChange={setDate} />
 
+      {invoiceNumber && <ThemedText type="small">🧾 電子發票 {invoiceNumber}</ThemedText>}
+
       <TextField
         label="備註（選填）"
         value={note}
         onChangeText={setNote}
         maxLength={200}
         placeholder="例如：午餐、計程車"
+      />
+
+      <ReceiptPhotoField
+        existingPath={initial?.receipt_path ?? null}
+        value={receipt}
+        onChange={setReceipt}
+        autoOpenCamera={!transactionId && preset.openCamera}
       />
 
       <View style={styles.section}>
@@ -380,6 +415,15 @@ function TransactionForm({
       )}
     </FormScreen>
   );
+}
+
+/** 單純的提示對話框（Web 的 Alert 沒有作用，改用 window.alert） */
+function notify(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
 }
 
 function AccountPicker({

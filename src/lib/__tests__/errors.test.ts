@@ -25,6 +25,16 @@ describe('toErrorMessage', () => {
     ).toContain('已不存在');
   });
 
+  it('同一張發票重複記帳', () => {
+    expect(
+      toErrorMessage({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "transactions_invoice_number_key"',
+      }),
+    ).toBe('這張發票已經記過了');
+    expect(toErrorMessage({ code: '23505', message: 'duplicate key value' })).toContain('相同');
+  });
+
   it('網路錯誤', () => {
     expect(toErrorMessage(new TypeError('Network request failed'))).toContain('無法連線');
   });

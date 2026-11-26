@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { check, fetchAllPages, ledgerKeys, unwrap } from '@/api/keys';
+import { removeReceipts, uploadReceipt } from '@/api/receipts';
 import { monthRange, yearRange, type Month } from '@/lib/date';
+import { toErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { useLedger } from '@/providers/ledger-provider';
 import type { Enums, Tables } from '@/types/database';
@@ -156,6 +158,15 @@ export function useTransaction(id: string | null) {
   });
 }
 
+/** 表單裡收據照片的狀態：沿用原本的、移除、或換成新拍／新選的（本機 uri） */
+export type ReceiptChange = { kind: 'keep' } | { kind: 'remove' } | { kind: 'new'; uri: string };
+
+export type SaveTransactionResult = {
+  transactionId: string;
+  /** 交易已存好但照片處理失敗時的訊息；null 代表全部成功 */
+  photoError: string | null;
+};
+
 export function useSaveTransaction() {
   const ledger = useLedger();
   const queryClient = useQueryClient();
@@ -164,11 +175,19 @@ export function useSaveTransaction() {
       id,
       input,
       tagIds,
+      invoiceNumber,
+      receipt,
+      oldReceiptPath,
     }: {
       id: string | null;
       input: TransactionInput;
       tagIds: string[];
-    }) => {
+      /** 只在新增時寫入（來自掃描電子發票）；編輯時不會改 invoice_number 與 source */
+      invoiceNumber?: string | null;
+      receipt: ReceiptChange;
+      /** 編輯前這筆記錄原本的照片路徑 */
+      oldReceiptPath: string | null;
+    }): Promise<SaveTransactionResult> => {
       let transactionId = id;
       if (id) {
         check(await supabase.from('transactions').update(input).eq('id', id));
@@ -178,14 +197,21 @@ export function useSaveTransaction() {
         const created = unwrap(
           await supabase
             .from('transactions')
-            .insert({ ...input, ledger_id: ledger.id })
+            .insert({
+              ...input,
+              ledger_id: ledger.id,
+              ...(invoiceNumber ? { invoice_number: invoiceNumber, source: 'invoice_qr' } : {}),
+            })
             .select('id')
             .single(),
         );
         transactionId = created.id;
       }
+      if (!transactionId) {
+        throw new Error('沒有取得資料，請稍後再試');
+      }
 
-      if (transactionId && tagIds.length > 0) {
+      if (tagIds.length > 0) {
         check(
           await supabase.from('transaction_tags').insert(
             tagIds.map((tag_id) => ({
@@ -196,6 +222,41 @@ export function useSaveTransaction() {
           ),
         );
       }
+
+      // 交易本身已經存好；照片失敗只回報訊息，不讓使用者以為整筆失敗
+      let photoError: string | null = null;
+      try {
+        if (receipt.kind === 'new') {
+          const path = await uploadReceipt(ledger.id, transactionId, receipt.uri);
+          try {
+            check(
+              await supabase
+                .from('transactions')
+                .update({ receipt_path: path })
+                .eq('id', transactionId),
+            );
+          } catch (e) {
+            // 路徑沒寫進去，剛上傳的檔案就成了孤兒，盡量清掉
+            await removeReceipts([path]).catch(() => undefined);
+            throw e;
+          }
+          // 新照片已經就位，才刪舊的；舊檔刪不掉不影響結果
+          if (oldReceiptPath) {
+            await removeReceipts([oldReceiptPath]).catch(() => undefined);
+          }
+        } else if (receipt.kind === 'remove' && oldReceiptPath) {
+          check(
+            await supabase
+              .from('transactions')
+              .update({ receipt_path: null })
+              .eq('id', transactionId),
+          );
+          await removeReceipts([oldReceiptPath]);
+        }
+      } catch (e) {
+        photoError = toErrorMessage(e);
+      }
+      return { transactionId, photoError };
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ledgerKeys.all(ledger.id) }),
   });
@@ -206,6 +267,13 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // 先刪照片（找不到檔案不算錯），再刪交易；刪不掉照片就不刪交易，避免留下孤兒檔案
+      const row = unwrap(
+        await supabase.from('transactions').select('receipt_path').eq('id', id).single(),
+      );
+      if (row.receipt_path) {
+        await removeReceipts([row.receipt_path]);
+      }
       check(await supabase.from('transactions').delete().eq('id', id));
     },
     // 不等重新整理完成，讓畫面先關閉；已刪除的那筆不用再抓（會查不到而報錯）

@@ -14,6 +14,10 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="quick" options={{ presentation: 'modal', title: '快速記帳' }} />
         <Stack.Screen
+          name="scan"
+          options={{ presentation: 'fullScreenModal', title: '掃描電子發票' }}
+        />
+        <Stack.Screen
           name="quick-setup"
           options={{ presentation: 'modal', title: '不開 App 記帳' }}
         />

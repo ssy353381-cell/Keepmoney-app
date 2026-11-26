@@ -168,6 +168,26 @@ function QuickForm({
         </ThemedText>
       </View>
 
+      <View style={styles.photoRow}>
+        <Button
+          title="📷 掃發票"
+          variant="secondary"
+          onPress={() => router.replace('/scan')}
+          style={styles.photoButton}
+        />
+        <Button
+          title="🧾 拍收據"
+          variant="secondary"
+          onPress={() =>
+            router.replace({
+              pathname: '/transaction/[id]',
+              params: { id: 'new', photo: 'camera' },
+            })
+          }
+          style={styles.photoButton}
+        />
+      </View>
+
       <Card style={styles.preview}>
         <ThemedText type="smallBold" themeColor="textSecondary">
           預覽
@@ -243,6 +263,13 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
     fontSize: 22,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  photoButton: {
+    flex: 1,
   },
   preview: {
     gap: Spacing.three,

@@ -49,6 +49,9 @@ export function toErrorMessage(error: unknown): string {
         ? '這筆資料還有交易在使用，無法刪除（可以改用封存）'
         : '選擇的帳戶或分類已不存在，請重新選擇';
     }
+    if (code === '23505' && text.includes('transactions_invoice_number_key')) {
+      return '這張發票已經記過了';
+    }
     const known = AUTH_MESSAGES[code] ?? DATABASE_MESSAGES[code];
     if (known) {
       return known;
