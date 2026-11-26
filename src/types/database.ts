@@ -472,10 +472,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_number: string | null
           ledger_id: string
           needs_review: boolean
           note: string | null
           occurred_on: string
+          receipt_path: string | null
           recurring_id: string | null
           source: Database["public"]["Enums"]["transaction_source"]
           to_account_id: string | null
@@ -490,10 +492,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_number?: string | null
           ledger_id: string
           needs_review?: boolean
           note?: string | null
           occurred_on: string
+          receipt_path?: string | null
           recurring_id?: string | null
           source?: Database["public"]["Enums"]["transaction_source"]
           to_account_id?: string | null
@@ -508,10 +512,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_number?: string | null
           ledger_id?: string
           needs_review?: boolean
           note?: string | null
           occurred_on?: string
+          receipt_path?: string | null
           recurring_id?: string | null
           source?: Database["public"]["Enums"]["transaction_source"]
           to_account_id?: string | null

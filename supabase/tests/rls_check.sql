@@ -470,6 +470,113 @@ $$;
 reset role;
 
 -- ---------------------------------------------------------------------
+-- 拍照記帳：發票號碼唯一、收據路徑限制、私有 bucket 與 policy
+-- ---------------------------------------------------------------------
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+declare
+  r record;
+  acct uuid := (select id from public.accounts where name = '現金');
+  cat uuid := (select id from public.categories where name = '飲食');
+  bad text;
+  blocked int;
+begin
+  select * into r from ids;
+
+  begin
+    insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, invoice_number)
+    values (r.alice_ledger, 'expense', 85, '2026-11-25', acct, cat, 'AB12345678');
+    insert into results values (52, '帶發票號碼的支出可以新增', '✅');
+  exception when others then
+    insert into results values (52, '帶發票號碼的支出可以新增', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, invoice_number)
+    values (r.alice_ledger, 'expense', 85, '2026-11-25', acct, cat, 'AB12345678');
+    insert into results values (53, '同一帳本不能重複記同一張發票', '❌ 寫入成功');
+  exception
+    when unique_violation then
+      insert into results values (53, '同一帳本不能重複記同一張發票', '✅ ' || sqlerrm);
+    when others then
+      insert into results values (53, '同一帳本不能重複記同一張發票', '❌ ' || sqlerrm);
+  end;
+
+  -- 小寫、位數不足：兩種格式錯誤都要被 check 擋下
+  blocked := 0;
+  foreach bad in array array['ab12345678', 'AB1234567'] loop
+    begin
+      insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, invoice_number)
+      values (r.alice_ledger, 'expense', 85, '2026-11-25', acct, cat, bad);
+    exception when check_violation then
+      blocked := blocked + 1;
+    end;
+  end loop;
+  insert into results values (54, '發票號碼格式錯誤要被擋下（小寫、位數不足）',
+    case when blocked = 2 then '✅' else '❌ 只擋下 ' || blocked || ' 種' end);
+
+  begin
+    insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, receipt_path)
+    values (r.alice_ledger, 'expense', 85, '2026-11-25', acct, cat, r.alice_ledger::text || '/x/y.jpg');
+    insert into results values (55, '收據路徑指向自己的帳本可以新增', '✅');
+  exception when others then
+    insert into results values (55, '收據路徑指向自己的帳本可以新增', '❌ ' || sqlerrm);
+  end;
+
+  begin
+    insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, receipt_path)
+    values (r.alice_ledger, 'expense', 85, '2026-11-25', acct, cat, r.bob_ledger::text || '/x/y.jpg');
+    insert into results values (56, '收據路徑不能指向別本帳本', '❌ 寫入成功');
+  exception
+    when check_violation then
+      insert into results values (56, '收據路徑不能指向別本帳本', '✅ ' || sqlerrm);
+    when others then
+      insert into results values (56, '收據路徑不能指向別本帳本', '❌ ' || sqlerrm);
+  end;
+end;
+$$;
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+declare
+  r record;
+begin
+  select * into r from ids;
+
+  begin
+    insert into public.transactions (ledger_id, type, amount, occurred_on, account_id, category_id, invoice_number)
+    values (r.bob_ledger, 'expense', 85, '2026-11-25', r.bob_cash, r.bob_food, 'AB12345678');
+    insert into results values (57, 'Bob 在自己的帳本可用同一個發票號碼（不同帳本互不影響）', '✅');
+  exception when others then
+    insert into results values (57, 'Bob 在自己的帳本可用同一個發票號碼（不同帳本互不影響）', '❌ ' || sqlerrm);
+  end;
+end;
+$$;
+reset role;
+
+do $$
+declare
+  cnt int;
+begin
+  select count(*) into cnt from storage.buckets where id = 'receipts' and public = false;
+  insert into results values (58, 'receipts bucket 存在且為私有', case when cnt = 1 then '✅' else '❌ 符合的 bucket 數 ' || cnt end);
+
+  -- 4 個 policy（select／insert／update／delete），且只開放給 authenticated（anon 沒有）
+  select count(*) into cnt from pg_policies
+  where schemaname = 'storage' and tablename = 'objects'
+    and policyname like 'receipts\_%'
+    and roles = array['authenticated']::name[];
+  insert into results values (59, 'storage.objects 有 4 個 receipts_ policy 且只給 authenticated',
+    case when cnt = 4 then '✅' else '❌ ' || cnt end);
+end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- 刪除帳號：Alice 單獨擁有的帳本與資料要一併刪除
 -- ---------------------------------------------------------------------
 do $$
