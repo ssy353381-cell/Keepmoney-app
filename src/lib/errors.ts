@@ -60,3 +60,20 @@ export function toErrorMessage(error: unknown): string {
 
   return text || '發生未知的錯誤，請稍後再試';
 }
+
+/** 還原備份時，資料不完整或彼此不一致造成的資料庫錯誤代碼（外鍵、not null、check） */
+const RESTORE_INCONSISTENT_CODES = ['23503', '23502', '23514'];
+
+/**
+ * 還原備份失敗的錯誤訊息。
+ * 資料庫的外鍵、check 錯誤訊息是英文，在還原時代表「備份內容不一致」，
+ * 而且整個還原是單一交易，失敗就什麼都沒寫入。其他錯誤沿用 toErrorMessage。
+ */
+export function toRestoreErrorMessage(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  if (typeof code === 'string' && RESTORE_INCONSISTENT_CODES.includes(code)) {
+    return '備份裡有資料不完整或不一致，已取消還原，你的資料沒有任何改變';
+  }
+  return toErrorMessage(error);
+}

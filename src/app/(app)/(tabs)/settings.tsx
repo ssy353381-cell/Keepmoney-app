@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useLastBackupDate } from '@/api/backup';
 import { useDeleteMyAccount, useProfile } from '@/api/profile';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,9 @@ import { Card } from '@/components/ui/card';
 import { TabScreen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { backupReminder } from '@/lib/backup-reminder';
 import { checkSupabaseConnection, type ConnectionResult } from '@/lib/check-supabase-connection';
+import { todayString } from '@/lib/date';
 import { confirmAction } from '@/lib/dialogs';
 import { toErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -27,6 +30,8 @@ export default function SettingsScreen() {
   const [checking, setChecking] = useState(false);
   const [connection, setConnection] = useState<ConnectionResult | null>(null);
   const deleteAccount = useDeleteMyAccount();
+  const lastBackup = useLastBackupDate();
+  const reminder = backupReminder(lastBackup.data ?? null, todayString());
 
   async function handleSignOut() {
     if (!(await confirmAction('登出', '確定要登出嗎？', '登出'))) {
@@ -84,6 +89,14 @@ export default function SettingsScreen() {
           variant="secondary"
           onPress={() => router.push('/quick-setup')}
         />
+      </Card>
+
+      <Card>
+        <ThemedText type="smallBold">備份與還原</ThemedText>
+        <ThemedText type="small" style={reminder.overdue ? { color: theme.warning } : undefined}>
+          {reminder.text}
+        </ThemedText>
+        <Button title="備份與還原" variant="secondary" onPress={() => router.push('/backup')} />
       </Card>
 
       <Card>

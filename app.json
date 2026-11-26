@@ -57,7 +57,8 @@
           "cameraPermission": "用來掃描電子發票的 QR code 與拍收據",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

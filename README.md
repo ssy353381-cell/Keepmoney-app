@@ -28,7 +28,7 @@
 | 記一筆     | 支出／收入／轉帳、金額、分類（含子分類）、帳戶、日期（今天／昨天或月曆）、備註、標籤                                                                                                                                                       |
 | 統計       | 本月收支、預算進度（80% 提醒、超支警示）、支出／收入分類排行（子分類併入父分類）                                                                                                                                                           |
 | 帳戶       | 各帳戶餘額與淨資產；新增、編輯、封存、刪除帳戶                                                                                                                                                                                             |
-| 設定       | 帳號資訊、不開 App 記帳（iPhone 捷徑＋Siri）、連線測試、登出、刪除帳號                                                                                                                                                                     |
+| 設定       | 帳號資訊、不開 App 記帳（iPhone 捷徑＋Siri）、備份與還原（JSON／CSV 匯出、從 JSON 還原）、連線測試、登出、刪除帳號                                                                                                                         |
 
 ## 開發環境需求
 
@@ -83,6 +83,7 @@ src/
       transaction/[id].tsx   #     記一筆／編輯記錄（id 為 new 代表新增）
       account/[id].tsx       #     新增／編輯帳戶
       budgets.tsx            #     每月預算設定
+      backup.tsx             #     備份與還原：匯出 JSON／CSV、選備份檔預覽並還原（彈出視窗）
   api/                       # 讀寫 Supabase 的 hooks（TanStack Query）
   providers/                 # 登入狀態、目前帳本
   components/                # 共用元件；ui/ 是按鈕、輸入框等基本元件
@@ -94,6 +95,7 @@ src/
                              #   relative-time：金鑰「上次使用」的顯示文字；env 的 quickEntryUrl 是捷徑網址
                              #   invoice-qr / invoice-scan：電子發票 QR 解析、左右 QR 掃描狀態
                              #   receipt-path / receipt-image / receipt-photo：照片路徑、縮圖規則、拍照與壓縮
+                             #   backup / backup-reminder / restore-result：備份檔格式與驗證、還原計畫、備份提醒、還原結果文字
                              #   daily-summary / leaf-color / leaf / tree / forest：樹葉的資料與幾何
   types/database.ts          # 由 Supabase 產生的資料庫型別（不要手改）
 supabase/migrations/         # 資料庫結構變更（SQL）
@@ -174,6 +176,7 @@ eas.json                     # EAS Build / Submit 設定
 - `occurred_on`（交易日期）沒有預設值：資料庫是 UTC，日期由 App 依使用者當地時間填入。
 - 刪除使用者時，會一併刪除他單獨擁有的帳本與其中所有資料。App 的「設定 → 刪除帳號」呼叫資料庫函式 `delete_my_account()`，只能刪除呼叫者自己（App Store 要求提供刪除帳號）。
 - `quick_add()`：給 iPhone 捷徑用的資料庫函式，anon 可呼叫，身分完全由捷徑金鑰決定（沒有金鑰就什麼都寫不進去）；寫入的交易一律是 `needs_review = true`、`source = 'shortcut'`，分類名稱對不到時退回「其他」。金鑰由登入使用者呼叫 `create_quick_entry_token()` 建立。
+- `restore_backup(p_ledger_id, p_payload)`：從備份還原用的資料庫函式，`security invoker`（用呼叫者身分寫入，RLS 照常生效，要有該帳本的寫入權限），整個函式是單一交易（任何一筆違反約束就整批取消、什麼都不寫入）；每個 insert 都 `on conflict do nothing`，衝突的略過，所以同一份備份重複還原不會重複寫入，回傳實際寫入的筆數；一律寫進 `p_ledger_id`、不寫 `created_by`；收據照片不在備份裡（`receipt_path` 一律為空）。App 的備份檔（JSON）由 `src/lib/backup.ts` 產生與驗證、`src/api/backup.ts` 匯出與還原；備份檔不含使用者 uuid（`created_by`）。
 - 定期收支目前只有資料表，設定畫面與自動產生交易之後再做。
 
 ### 修改資料表的流程

@@ -1,4 +1,4 @@
-import { toErrorMessage } from '@/lib/errors';
+import { toErrorMessage, toRestoreErrorMessage } from '@/lib/errors';
 
 describe('toErrorMessage', () => {
   it('翻譯 Auth 錯誤代碼', () => {
@@ -42,5 +42,23 @@ describe('toErrorMessage', () => {
   it('未知錯誤保留原訊息', () => {
     expect(toErrorMessage({ code: 'XX000', message: 'boom' })).toBe('boom');
     expect(toErrorMessage(null)).toBe('發生未知的錯誤，請稍後再試');
+  });
+});
+
+describe('toRestoreErrorMessage', () => {
+  it('外鍵、not null、check 違反都說明已取消還原', () => {
+    for (const code of ['23503', '23502', '23514']) {
+      expect(
+        toRestoreErrorMessage({ code, message: 'insert or update on table "transactions"' }),
+      ).toBe('備份裡有資料不完整或不一致，已取消還原，你的資料沒有任何改變');
+    }
+  });
+
+  it('其他錯誤沿用一般的訊息', () => {
+    expect(toRestoreErrorMessage({ code: '42501', message: 'permission denied' })).toBe(
+      '沒有權限進行這個操作',
+    );
+    expect(toRestoreErrorMessage({ message: 'Network request failed' })).toContain('無法連線');
+    expect(toRestoreErrorMessage('oops')).toBe('oops');
   });
 });

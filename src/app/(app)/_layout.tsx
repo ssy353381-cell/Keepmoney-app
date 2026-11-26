@@ -28,6 +28,7 @@ export default function AppLayout() {
         <Stack.Screen name="day/[date]" options={{ presentation: 'modal', title: '這一天' }} />
         <Stack.Screen name="account/[id]" options={{ presentation: 'modal', title: '帳戶' }} />
         <Stack.Screen name="budgets" options={{ presentation: 'modal', title: '每月預算' }} />
+        <Stack.Screen name="backup" options={{ presentation: 'modal', title: '備份與還原' }} />
       </Stack>
     </LedgerProvider>
   );
