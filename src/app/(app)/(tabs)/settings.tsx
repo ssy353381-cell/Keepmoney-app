@@ -100,6 +100,18 @@ export default function SettingsScreen() {
       </Card>
 
       <Card>
+        <ThemedText type="smallBold">手機條碼載具</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          把財政部平台匯出的載具消費明細一次匯入
+        </ThemedText>
+        <Button
+          title="匯入發票明細"
+          variant="secondary"
+          onPress={() => router.push('/carrier-import')}
+        />
+      </Card>
+
+      <Card>
         <ThemedText type="smallBold">連線狀態</ThemedText>
         <Button
           title={checking ? '測試中…' : '測試 Supabase 連線'}

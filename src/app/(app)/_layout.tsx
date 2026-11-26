@@ -29,6 +29,10 @@ export default function AppLayout() {
         <Stack.Screen name="account/[id]" options={{ presentation: 'modal', title: '帳戶' }} />
         <Stack.Screen name="budgets" options={{ presentation: 'modal', title: '每月預算' }} />
         <Stack.Screen name="backup" options={{ presentation: 'modal', title: '備份與還原' }} />
+        <Stack.Screen
+          name="carrier-import"
+          options={{ presentation: 'modal', title: '匯入手機條碼發票' }}
+        />
       </Stack>
     </LedgerProvider>
   );
