@@ -577,6 +577,161 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
+-- 還原備份：restore_backup
+-- ---------------------------------------------------------------------
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+declare
+  l uuid := (select alice_ledger from ids);
+  bob_l uuid := (select bob_ledger from ids);
+  food uuid := (select id from public.categories where name = '飲食');
+  salary uuid := (select id from public.categories where name = '薪資');
+  acct uuid := 'f0000000-0000-4000-8000-000000000001';
+  parent_cat uuid := 'f0000000-0000-4000-8000-000000000002';
+  child_cat uuid := 'f0000000-0000-4000-8000-000000000003';
+  tag uuid := 'f0000000-0000-4000-8000-000000000004';
+  rec uuid := 'f0000000-0000-4000-8000-000000000005';
+  tx1 uuid := 'f0000000-0000-4000-8000-000000000006';
+  tx2 uuid := 'f0000000-0000-4000-8000-000000000007';
+  bud uuid := 'f0000000-0000-4000-8000-000000000008';
+  payload jsonb;
+  res json;
+  cnt int;
+  bad_acct uuid := 'f0000000-0000-4000-8000-0000000000e1';
+begin
+  -- 子分類故意排在上層分類前面，驗證函式會先寫上層
+  payload := format($j$ {
+    "accounts": [{"id": "%1$s", "ledger_id": "%9$s", "name": "還原帳戶", "type": "bank", "initial_balance": 100, "is_archived": false, "sort_order": 5, "created_at": "2026-01-01T00:00:00Z"}],
+    "categories": [
+      {"id": "%3$s", "ledger_id": "%9$s", "kind": "expense", "parent_id": "%2$s", "name": "還原子分類", "icon": null, "color": "#112233", "sort_order": 1, "is_archived": false, "created_at": "2026-01-01T00:00:00Z"},
+      {"id": "%2$s", "ledger_id": "%9$s", "kind": "expense", "parent_id": null, "name": "還原上層", "icon": "🔁", "color": null, "sort_order": 1, "is_archived": false, "created_at": "2026-01-01T00:00:00Z"}
+    ],
+    "tags": [{"id": "%4$s", "ledger_id": "%9$s", "name": "還原標籤", "color": null, "created_at": "2026-01-01T00:00:00Z"}],
+    "recurring_transactions": [{"id": "%5$s", "ledger_id": "%9$s", "type": "expense", "amount": 500, "account_id": "%1$s", "to_account_id": null, "category_id": "%3$s", "note": "還原定期", "frequency": "monthly", "interval_count": 1, "start_on": "2026-01-01", "end_on": null, "next_occurs_on": "2026-12-01", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}],
+    "transactions": [
+      {"id": "%6$s", "ledger_id": "%9$s", "type": "expense", "amount": 77, "occurred_on": "2026-02-03", "account_id": "%1$s", "to_account_id": null, "category_id": "%10$s", "note": "帶標籤", "recurring_id": null, "invoice_number": "CD12345678", "needs_review": true, "source": "invoice_qr", "receipt_path": null, "created_at": "2026-02-03T08:00:00Z"},
+      {"id": "%7$s", "ledger_id": "%9$s", "type": "expense", "amount": 88, "occurred_on": "2026-02-04", "account_id": "%1$s", "to_account_id": null, "category_id": "%3$s", "note": "用子分類", "recurring_id": "%5$s", "invoice_number": null, "needs_review": false, "source": "import", "receipt_path": null, "created_at": "2026-02-04T08:00:00Z"}
+    ],
+    "transaction_tags": [{"ledger_id": "%9$s", "transaction_id": "%6$s", "tag_id": "%4$s"}],
+    "budgets": [{"id": "%8$s", "ledger_id": "%9$s", "category_id": "%2$s", "category_kind": "expense", "amount": 3000, "created_at": "2026-01-01T00:00:00Z"}]
+  } $j$, acct, parent_cat, child_cat, tag, rec, tx1, tx2, bud, l, food)::jsonb;
+
+  -- 62：第一次還原，回傳的筆數都正確
+  begin
+    res := public.restore_backup(l, payload);
+    insert into results values (62, 'restore_backup 還原：回傳各表實際寫入的筆數',
+      case when res::jsonb = '{"accounts":1,"categories":2,"tags":1,"recurring_transactions":1,"transactions":2,"transaction_tags":1,"budgets":1}'::jsonb
+           then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (62, 'restore_backup 還原：回傳各表實際寫入的筆數', '❌ ' || sqlerrm);
+  end;
+
+  -- 63：資料真的寫入、屬於 Alice 的帳本，receipt_path 為 null、created_by 是 Alice
+  select
+    (select count(*) from public.accounts where id = acct and ledger_id = l and initial_balance = 100)
+    + (select count(*) from public.categories where id in (parent_cat, child_cat) and ledger_id = l)
+    + (select count(*) from public.categories where id = child_cat and parent_id = parent_cat)
+    + (select count(*) from public.tags where id = tag and ledger_id = l)
+    + (select count(*) from public.recurring_transactions where id = rec and ledger_id = l)
+    + (select count(*) from public.transactions where id in (tx1, tx2) and ledger_id = l
+         and receipt_path is null and created_by = '00000000-0000-4000-8000-0000000000a1')
+    + (select count(*) from public.transactions where id = tx1 and needs_review and source = 'invoice_qr'
+         and invoice_number = 'CD12345678' and created_at = '2026-02-03T08:00:00Z')
+    + (select count(*) from public.transactions where id = tx2 and recurring_id = rec and category_id = child_cat)
+    + (select count(*) from public.transaction_tags where transaction_id = tx1 and tag_id = tag and ledger_id = l)
+    + (select count(*) from public.budgets where id = bud and ledger_id = l and category_id = parent_cat)
+  into cnt;
+  insert into results values (63, 'restore_backup 還原：資料真的寫入 Alice 的帳本',
+    case when cnt = 1 + 2 + 1 + 1 + 1 + 2 + 1 + 1 + 1 + 1 then '✅' else '❌ 符合 ' || cnt end);
+
+  -- 64：同一份再還原一次，全部略過、沒有錯誤
+  begin
+    res := public.restore_backup(l, payload);
+    insert into results values (64, 'restore_backup 重複還原同一份：全部 0 筆、沒有錯誤',
+      case when res::jsonb = '{"accounts":0,"categories":0,"tags":0,"recurring_transactions":0,"transactions":0,"transaction_tags":0,"budgets":0}'::jsonb
+           then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (64, 'restore_backup 重複還原同一份：全部 0 筆、沒有錯誤', '❌ ' || sqlerrm);
+  end;
+
+  -- 65：payload 裡的 ledger_id 寫成 Bob 的帳本，仍會寫進 Alice 的帳本
+  begin
+    res := public.restore_backup(l, format($j$ {
+      "accounts": [{"id": "f0000000-0000-4000-8000-0000000000c1", "ledger_id": "%1$s", "name": "想寫到 Bob 的帳戶", "type": "cash", "initial_balance": 0, "is_archived": false, "sort_order": 0, "created_at": "2026-01-01T00:00:00Z"}],
+      "tags": [{"id": "f0000000-0000-4000-8000-0000000000c2", "ledger_id": "%1$s", "name": "想寫到 Bob 的標籤", "color": null, "created_at": "2026-01-01T00:00:00Z"}]
+    } $j$, bob_l)::jsonb);
+    select count(*) into cnt from public.accounts
+    where id = 'f0000000-0000-4000-8000-0000000000c1' and ledger_id = l;
+    insert into results values (65, 'restore_backup 忽略 payload 的 ledger_id，一律寫進自己的帳本',
+      case when (res::jsonb ->> 'accounts')::int = 1 and (res::jsonb ->> 'tags')::int = 1 and cnt = 1 then '✅' else '❌ ' || res::text end);
+  exception when others then
+    insert into results values (65, 'restore_backup 忽略 payload 的 ledger_id，一律寫進自己的帳本', '❌ ' || sqlerrm);
+  end;
+
+  -- 67：一筆交易的分類類型不符（支出用收入分類）→ 整批失敗，前面的帳戶也不留下
+  begin
+    perform public.restore_backup(l, format($j$ {
+      "accounts": [{"id": "%1$s", "ledger_id": "%2$s", "name": "應該被回滾的帳戶", "type": "cash", "initial_balance": 0, "is_archived": false, "sort_order": 0, "created_at": "2026-01-01T00:00:00Z"}],
+      "transactions": [{"id": "f0000000-0000-4000-8000-0000000000d1", "ledger_id": "%2$s", "type": "expense", "amount": 10, "occurred_on": "2026-03-01", "account_id": "%1$s", "to_account_id": null, "category_id": "%3$s", "note": null, "recurring_id": null, "invoice_number": null, "needs_review": false, "source": "import", "receipt_path": null, "created_at": "2026-03-01T00:00:00Z"}]
+    } $j$, bad_acct, l, salary)::jsonb);
+    insert into results values (67, 'restore_backup 分類類型不符：整批失敗、帳戶一併回滾', '❌ 還原成功');
+  exception when others then
+    select count(*) into cnt from public.accounts where id = bad_acct;
+    insert into results values (67, 'restore_backup 分類類型不符：整批失敗、帳戶一併回滾',
+      case when sqlstate = '23503' and cnt = 0 then '✅ ' || sqlerrm else format('❌ %s／帳戶留下 %s 個／%s', sqlstate, cnt, sqlerrm) end);
+  end;
+end;
+$$;
+reset role;
+
+-- 以管理者身分確認 Bob 的帳本沒有被塞進資料（65）
+do $$
+declare
+  cnt int;
+begin
+  select (select count(*) from public.accounts where ledger_id = (select bob_ledger from ids) and name = '想寫到 Bob 的帳戶')
+       + (select count(*) from public.tags where ledger_id = (select bob_ledger from ids) and name = '想寫到 Bob 的標籤')
+       + (select count(*) from public.accounts where ledger_id = (select bob_ledger from ids) and name = '還原帳戶')
+  into cnt;
+  insert into results values (66, 'restore_backup 沒有寫進 Bob 的帳本',
+    case when cnt = 0 then '✅' else '❌ Bob 的帳本多了 ' || cnt || ' 筆' end);
+end;
+$$;
+
+-- 68：Bob 不能還原到 Alice 的帳本
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
+set local role authenticated;
+
+do $$
+begin
+  perform public.restore_backup((select alice_ledger from ids), '{}'::jsonb);
+  insert into results values (68, 'Bob 不能對 Alice 的帳本 restore_backup', '❌ 還原成功');
+exception when others then
+  insert into results values (68, 'Bob 不能對 Alice 的帳本 restore_backup',
+    case when sqlstate = '42501' then '✅ ' || sqlerrm else '❌ ' || sqlstate || ' ' || sqlerrm end);
+end;
+$$;
+reset role;
+
+-- 69：未登入（anon）不能呼叫（先讓 anon 能讀 ids，避免因讀不到 ids 而誤判為通過）
+grant select on ids to anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+
+do $$
+begin
+  perform public.restore_backup((select alice_ledger from ids), '{}'::jsonb);
+  insert into results values (69, 'anon 不能呼叫 restore_backup', '❌ 呼叫成功');
+exception when others then
+  insert into results values (69, 'anon 不能呼叫 restore_backup',
+    case when sqlstate = '42501' then '✅ ' || sqlerrm else '❌ ' || sqlstate || ' ' || sqlerrm end);
+end;
+$$;
+reset role;
+
+-- ---------------------------------------------------------------------
 -- 刪除帳號：Alice 單獨擁有的帳本與資料要一併刪除
 -- ---------------------------------------------------------------------
 do $$

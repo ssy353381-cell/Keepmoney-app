@@ -616,6 +616,10 @@ export type Database = {
         }
         Returns: Json
       }
+      restore_backup: {
+        Args: { p_ledger_id: string; p_payload: Json }
+        Returns: Json
+      }
     }
     Enums: {
       account_type:
